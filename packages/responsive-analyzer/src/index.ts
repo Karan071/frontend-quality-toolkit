@@ -7,6 +7,9 @@ export type DeviceCategory = 'phone' | 'tablet' | 'laptop' | 'desktop' | 'ultraw
 
 export type DeviceBrand = 'Apple' | 'Samsung' | 'Google' | 'Microsoft';
 
+/** How the front of the device is drawn in the simulator: what cuts into (or sits around) the screen. */
+export type DeviceCutout = 'island' | 'notch' | 'punch' | 'home-button' | 'none';
+
 export const CATEGORY_LABELS: Record<DeviceCategory, string> = {
   phone: 'Phones',
   tablet: 'Tablets',
@@ -31,11 +34,18 @@ export interface DevicePreset {
   /** Typical physical diagonal, for the devices where size is the point. */
   inches?: number;
   note?: string;
+  /** Front-camera / sensor style, for the simulator's device frame. Defaults by category, see cutoutFor. */
+  cutout?: DeviceCutout;
+}
+
+/** Phones default to a punch-hole camera; everything else has no screen cutout. */
+export function cutoutFor(p: Pick<DevicePreset, 'category' | 'cutout'>): DeviceCutout {
+  return p.cutout ?? (p.category === 'phone' ? 'punch' : 'none');
 }
 
 const d = (
   id: string, label: string, width: number, height: number, dpr: number, category: DeviceCategory,
-  extra: Partial<Pick<DevicePreset, 'inches' | 'note' | 'brand'>> = {},
+  extra: Partial<Pick<DevicePreset, 'inches' | 'note' | 'brand' | 'cutout'>> = {},
 ): DevicePreset => ({
   id, label, width, height, dpr, category, ...extra,
   mode: deviceModeFor(width, height),
@@ -53,35 +63,35 @@ export const DEVICE_PRESETS: DevicePreset[] = [
   d('fold', 'Galaxy Fold (folded)', 280, 653, 3, 'phone', { brand: 'Samsung', note: 'Narrowest common phone' }),
   d('fold5', 'Galaxy Z Fold 5 (folded)', 344, 882, 3, 'phone', { brand: 'Samsung' }),
   d('mobile-s', 'Small mobile', 320, 640, 2, 'phone'),
-  d('iphone-se', 'iPhone SE', 375, 667, 2, 'phone', { brand: 'Apple', inches: 4.7, note: 'SE 2nd/3rd gen, 8' }),
-  d('iphone-mini', 'iPhone 13 mini', 375, 812, 3, 'phone', { brand: 'Apple', inches: 5.4, note: 'also 12 mini, X, 11 Pro' }),
+  d('iphone-se', 'iPhone SE', 375, 667, 2, 'phone', { brand: 'Apple', inches: 4.7, note: 'SE 2nd/3rd gen, 8', cutout: 'home-button' }),
+  d('iphone-mini', 'iPhone 13 mini', 375, 812, 3, 'phone', { brand: 'Apple', inches: 5.4, note: 'also 12 mini, X, 11 Pro', cutout: 'notch' }),
   d('galaxy-s24', 'Galaxy S24', 360, 780, 3, 'phone', { brand: 'Samsung', inches: 6.2, note: 'also S25, S26' }),
   d('mobile', 'Mobile', 390, 844, 3, 'phone'),
-  d('iphone-14', 'iPhone 14', 390, 844, 3, 'phone', { brand: 'Apple', inches: 6.1, note: 'also 12, 13, 13 Pro' }),
-  d('iphone-15', 'iPhone 15 / 16', 393, 852, 3, 'phone', { brand: 'Apple', inches: 6.1, note: 'also 14 Pro, 15 Pro' }),
-  d('iphone-16-pro', 'iPhone 16 Pro', 402, 874, 3, 'phone', { brand: 'Apple', inches: 6.3, note: 'also 17, 17 Pro' }),
+  d('iphone-14', 'iPhone 14', 390, 844, 3, 'phone', { brand: 'Apple', inches: 6.1, note: 'also 12, 13, 13 Pro', cutout: 'notch' }),
+  d('iphone-15', 'iPhone 15 / 16', 393, 852, 3, 'phone', { brand: 'Apple', inches: 6.1, note: 'also 14 Pro, 15 Pro', cutout: 'island' }),
+  d('iphone-16-pro', 'iPhone 16 Pro', 402, 874, 3, 'phone', { brand: 'Apple', inches: 6.3, note: 'also 17, 17 Pro', cutout: 'island' }),
   d('pixel-8', 'Pixel 8', 412, 915, 2.625, 'phone', { brand: 'Google', inches: 6.2, note: 'also Pixel 7' }),
   d('galaxy-a51', 'Galaxy A51/A71', 412, 914, 2.625, 'phone', { brand: 'Samsung' }),
-  d('iphone-plus', 'iPhone 14 Plus', 428, 926, 3, 'phone', { brand: 'Apple', inches: 6.7, note: 'also 12/13 Pro Max' }),
+  d('iphone-plus', 'iPhone 14 Plus', 428, 926, 3, 'phone', { brand: 'Apple', inches: 6.7, note: 'also 12/13 Pro Max', cutout: 'notch' }),
   d('mobile-l', 'Large phone', 430, 932, 3, 'phone'),
-  d('iphone-pro-max', 'iPhone 15 Pro Max / 16 Plus', 430, 932, 3, 'phone', { brand: 'Apple', inches: 6.7, note: 'also 14 Pro Max' }),
-  d('iphone-16-pm', 'iPhone 16 Pro Max', 440, 956, 3, 'phone', { brand: 'Apple', inches: 6.9, note: 'also 17 Pro Max' }),
+  d('iphone-pro-max', 'iPhone 15 Pro Max / 16 Plus', 430, 932, 3, 'phone', { brand: 'Apple', inches: 6.7, note: 'also 14 Pro Max', cutout: 'island' }),
+  d('iphone-16-pm', 'iPhone 16 Pro Max', 440, 956, 3, 'phone', { brand: 'Apple', inches: 6.9, note: 'also 17 Pro Max', cutout: 'island' }),
   d('galaxy-z-flip', 'Galaxy Z Flip 7', 360, 840, 3, 'phone', { brand: 'Samsung', inches: 6.9, note: 'unfolded' }),
   d('pixel-9', 'Pixel 9', 360, 808, 3, 'phone', { brand: 'Google', inches: 6.3 }),
-  d('iphone-17e', 'iPhone 17e', 390, 844, 3, 'phone', { brand: 'Apple', inches: 6.1 }),
+  d('iphone-17e', 'iPhone 17e', 390, 844, 3, 'phone', { brand: 'Apple', inches: 6.1, cutout: 'notch' }),
   d('pixel-9-pro', 'Pixel 9 Pro', 427, 952, 3, 'phone', { brand: 'Google', inches: 6.3 }),
-  d('iphone-air', 'iPhone Air', 420, 912, 3, 'phone', { brand: 'Apple', inches: 6.5 }),
+  d('iphone-air', 'iPhone Air', 420, 912, 3, 'phone', { brand: 'Apple', inches: 6.5, cutout: 'island' }),
   d('galaxy-s25-ultra', 'Galaxy S25 Ultra', 412, 891, 3.5, 'phone', { brand: 'Samsung', inches: 6.9, note: 'also S25+, S26 Ultra' }),
   d('oneplus-13', 'OnePlus 13', 412, 905, 3.5, 'phone', { inches: 6.8 }),
   d('pixel-9-pro-xl', 'Pixel 9 Pro XL', 448, 997, 3, 'phone', { brand: 'Google', inches: 6.8 }),
-  d('surface-duo', 'Surface Duo', 540, 720, 2.5, 'phone', { brand: 'Microsoft', note: 'one screen' }),
+  d('surface-duo', 'Surface Duo', 540, 720, 2.5, 'phone', { brand: 'Microsoft', note: 'one screen', cutout: 'none' }),
   d('fold-open', 'Foldable (unfolded)', 884, 1104, 2, 'phone'),
   d('fold7-open', 'Galaxy Z Fold 7 (unfolded)', 984, 1092, 2, 'phone', { brand: 'Samsung', inches: 8 }),
 
   // ── tablets ──
   d('ipad-mini', 'iPad mini', 744, 1133, 2, 'tablet', { brand: 'Apple', inches: 8.3 }),
   d('tablet', 'Tablet', 768, 1024, 2, 'tablet'),
-  d('ipad-9', 'iPad 10.2″', 810, 1080, 2, 'tablet', { brand: 'Apple', inches: 10.2, note: '7th–9th gen' }),
+  d('ipad-9', 'iPad 10.2″', 810, 1080, 2, 'tablet', { brand: 'Apple', inches: 10.2, note: '7th–9th gen', cutout: 'home-button' }),
   d('ipad-10', 'iPad 10th gen / Air 11″', 820, 1180, 2, 'tablet', { brand: 'Apple', inches: 10.9 }),
   d('ipad-pro-11', 'iPad Pro 11″', 834, 1194, 2, 'tablet', { brand: 'Apple', inches: 11 }),
   d('ipad-pro-11-m4', 'iPad Pro 11″ (M4)', 834, 1210, 2, 'tablet', { brand: 'Apple', inches: 11 }),

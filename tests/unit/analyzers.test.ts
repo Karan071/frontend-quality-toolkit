@@ -6,7 +6,7 @@ import { analyzeColors, analyzePalette, classifyHarmony } from '@ftk/color-analy
 import { parseBreakpoints, classifyToken } from '@ftk/css-analyzer';
 import { analyzeImages, attachImageSizes, evaluateImage, imageFormat } from '@ftk/image-analyzer';
 import { analyzePerformance, rateVital } from '@ftk/performance-analyzer';
-import { CATEGORY_LABELS, CORE_PRESET_IDS, DEVICE_PRESETS, analyzeResponsive, aspectLabel, describeDevice, deviceModeFor, mediaQueryFor, orientPreset, physicalSize } from '@ftk/responsive-analyzer';
+import { CATEGORY_LABELS, CORE_PRESET_IDS, DEVICE_PRESETS, analyzeResponsive, aspectLabel, cutoutFor, describeDevice, deviceModeFor, mediaQueryFor, orientPreset, physicalSize } from '@ftk/responsive-analyzer';
 import { analyzeTypography } from '@ftk/typography-analyzer';
 import { analyzeUx, buttonVariants, summarizeSpacing } from '@ftk/ux-analyzer';
 import { emptyVitals, image, resource, snapshot } from './fixtures';
@@ -358,6 +358,18 @@ describe('device catalogue', () => {
     expect(byId('fold7-open')).toMatchObject({ width: 984, height: 1092 });
     expect(byId('ipad-pro-11-m4')).toMatchObject({ width: 834, height: 1210, category: 'tablet' });
     expect(DEVICE_PRESETS.length).toBeGreaterThanOrEqual(70);
+  });
+
+  it('picks the right front-camera style for the device frame', () => {
+    expect(cutoutFor(byId('iphone-16-pro'))).toBe('island');
+    expect(cutoutFor(byId('iphone-14'))).toBe('notch');
+    expect(cutoutFor(byId('iphone-se'))).toBe('home-button');
+    expect(cutoutFor(byId('pixel-8'))).toBe('punch'); // phones default to a punch-hole camera
+    expect(cutoutFor(byId('ipad-9'))).toBe('home-button');
+    expect(cutoutFor(byId('macbook-pro-14'))).toBe('none');
+    expect(cutoutFor(orientPreset(byId('iphone-15'), true))).toBe('island'); // survives rotation
+    // Every Apple phone is drawn explicitly rather than by the default.
+    for (const p of DEVICE_PRESETS.filter((x) => x.brand === 'Apple' && x.category === 'phone')) expect(p.cutout, p.id).toBeDefined();
   });
 
   it('rotates phones and tablets but never desktops or TVs', () => {

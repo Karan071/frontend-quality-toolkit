@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CATEGORY_LABELS, DEVICE_PRESETS, aspectLabel, orientPreset, physicalSize } from '@ftk/responsive-analyzer';
 import type { DeviceCategory, DevicePreset } from '@ftk/responsive-analyzer';
 import { Icon } from '../sidepanel/components/icons';
+import { DeviceFrame, frameLayout } from './DeviceFrame';
 import { applyNetworkRules, clearNetworkRules, userAgentFor } from './network';
 
 type Filter = DeviceCategory | 'apple';
@@ -38,20 +39,6 @@ function save(next: Saved) {
 }
 
 // ───────────────────────────── geometry ─────────────────────────────
-
-/** How the physical device is drawn around the viewport, all in CSS px before zooming. */
-function frameMetrics(p: DevicePreset, framed: boolean) {
-  const cat = p.category;
-  const longest = Math.max(p.width, p.height);
-  const bezel = !framed ? 0 : cat === 'phone' ? 14 : cat === 'tablet' ? 22 : clamp(Math.round(longest * 0.012), 10, 36);
-  const bodyRadius = !framed ? 0 : cat === 'phone' ? 50 : cat === 'tablet' ? 32 : cat === 'laptop' ? 18 : 12;
-  const screenRadius = !framed ? 0 : cat === 'phone' ? 36 : cat === 'tablet' ? 14 : 4;
-  const stand = !framed ? 0 : cat === 'laptop' ? 20 : cat === 'desktop' || cat === 'ultrawide' || cat === 'tv' ? clamp(Math.round(p.height * 0.1), 40, 220) : 0;
-  const padX = framed && cat === 'laptop' ? Math.round(p.width * 0.04) : 0;
-  const bodyW = p.width + bezel * 2;
-  const bodyH = p.height + bezel * 2;
-  return { bezel, bodyRadius, screenRadius, stand, padX, bodyW, bodyH, totalW: bodyW + padX * 2, totalH: bodyH + stand };
-}
 
 function useElementSize<T extends HTMLElement>() {
   const ref = useRef<T>(null);
@@ -159,7 +146,14 @@ export function Simulator() {
 
   const base = DEVICE_PRESETS.find((p) => p.id === deviceId) ?? DEVICE_PRESETS[0];
   const device = useMemo(() => orientPreset(base, landscape), [base, landscape]);
-  const m = frameMetrics(device, framed);
+  const m = frameLayout(device, framed);
+  const host = useMemo(() => {
+    try {
+      return new URL(url).host;
+    } catch {
+      return '';
+    }
+  }, [url]);
   const phys = physicalSize(device);
 
   const availW = Math.max(120, canvasSize.width - CANVAS_PAD * 2);
@@ -338,41 +332,21 @@ export function Simulator() {
             </div>
           ) : (
             <div className="sim-sizer" style={{ width: m.totalW * scale, height: m.totalH * scale }}>
-              <div className={`sim-device ${device.category}`} style={{ width: m.totalW, height: m.totalH, transform: `scale(${scale})` }}>
-                <div className="sim-body" style={{ left: m.padX, width: m.bodyW, height: m.bodyH, padding: m.bezel, borderRadius: m.bodyRadius }}>
-                  <div className="sim-screen" style={{ width: device.width, height: device.height, borderRadius: m.screenRadius }}>
-                    {net.ready && (
-                      <iframe
-                        key={reloadKey}
-                        title={`${device.label} preview of ${url}`}
-                        src={url}
-                        width={device.width}
-                        height={device.height}
-                        // No allow-top-navigation: framed pages cannot navigate this simulator away.
-                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads allow-pointer-lock"
-                        allow="fullscreen; clipboard-read; clipboard-write"
-                        onLoad={() => setLoading(false)}
-                      />
-                    )}
-                  </div>
-                </div>
-                {m.stand > 0 && (
-                  <div
-                    className="sim-stand"
-                    style={device.category === 'laptop' ? { top: m.bodyH, left: 0, width: m.totalW, height: m.stand } : { top: m.bodyH, left: m.padX, width: m.bodyW, height: m.stand }}
-                    aria-hidden="true"
-                  >
-                    {device.category === 'laptop' ? (
-                      <span className="sim-base" />
-                    ) : (
-                      <>
-                        <span className="sim-neck" />
-                        <span className="sim-foot" />
-                      </>
-                    )}
-                  </div>
+              <DeviceFrame device={device} layout={m} scale={scale} host={host}>
+                {net.ready && (
+                  <iframe
+                    key={reloadKey}
+                    title={`${device.label} preview of ${url}`}
+                    src={url}
+                    width={device.width}
+                    height={device.height}
+                    // No allow-top-navigation: framed pages cannot navigate this simulator away.
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads allow-pointer-lock"
+                    allow="fullscreen; clipboard-read; clipboard-write"
+                    onLoad={() => setLoading(false)}
+                  />
                 )}
-              </div>
+              </DeviceFrame>
             </div>
           )}
         </div>
