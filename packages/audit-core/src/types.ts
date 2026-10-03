@@ -169,6 +169,8 @@ export interface StylesheetSample {
   media: string | null;
   inHead: boolean;
   accessible: boolean;
+  /** Cross-origin sheet that was fetched and parsed from its text instead. */
+  parsed?: boolean;
   ruleCount: number | null;
 }
 

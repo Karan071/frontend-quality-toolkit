@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-import { accessibleName, implicitRole, uniqueSelector } from '@ftk/dom-analyzer/collect';
+import { accessibleName, elementsIn, implicitRole, parentOf, queryAllSafe, uniqueSelector } from '@ftk/dom-analyzer/collect';
 
 beforeEach(() => {
   document.body.innerHTML = `
@@ -63,5 +63,50 @@ describe('accessibleName fallbacks', () => {
     document.body.innerHTML = '<a id="v" href="#"><div class="arrow" title="upvote"></div></a><a id="x" href="#"><div></div></a>';
     expect(accessibleName(document.getElementById('v')!)).toBe('upvote');
     expect(accessibleName(document.getElementById('x')!)).toBe('');
+  });
+});
+
+describe('shadow DOM', () => {
+  function setup() {
+    document.body.innerHTML = '<div id="app"><x-card class="card"></x-card><x-card class="card" id="second"></x-card></div>';
+    for (const host of document.querySelectorAll('x-card')) {
+      const root = host.attachShadow({ mode: 'open' });
+      root.innerHTML = '<div class="body"><p class="t">hello</p><button id="go">Go</button></div>';
+    }
+  }
+
+  it('produces host >>> inner selectors that resolve to exactly the element', () => {
+    setup();
+    for (const host of document.querySelectorAll('x-card')) {
+      for (const inner of Array.from(host.shadowRoot!.querySelectorAll('*'))) {
+        const sel = uniqueSelector(inner);
+        expect(sel).toContain(' >>> ');
+        const hits = queryAllSafe(sel);
+        expect(hits, sel).toEqual([inner]);
+      }
+    }
+  });
+
+  it('walks into shadow roots, host before its shadow content', () => {
+    setup();
+    const all = [...elementsIn(document.body)];
+    const hostIdx = all.findIndex((e) => e.id === 'second');
+    const innerIdx = all.findIndex((e) => e.parentElement === null && e.localName === 'div' && e.getRootNode() === document.getElementById('second')!.shadowRoot);
+    expect(hostIdx).toBeGreaterThan(-1);
+    expect(innerIdx).toBeGreaterThan(hostIdx);
+    expect(all.filter((e) => e.localName === 'button')).toHaveLength(2);
+  });
+
+  it('crosses the boundary when climbing to the parent', () => {
+    setup();
+    const top = document.getElementById('second')!.shadowRoot!.querySelector('.body')!;
+    expect(parentOf(top)?.id).toBe('second');
+    expect(accessibleName(document.getElementById('second')!.shadowRoot!.getElementById('go')!)).toBe('Go');
+  });
+
+  it('keeps light-DOM selectors unchanged and tolerates garbage', () => {
+    setup();
+    expect(uniqueSelector(document.getElementById('app')!)).toBe('#app');
+    expect(queryAllSafe('::nope >>> ???')).toEqual([]);
   });
 });

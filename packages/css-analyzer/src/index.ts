@@ -45,3 +45,42 @@ export function sourceLabel(href: string | null): string {
     return href;
   }
 }
+
+export interface ParsedCss {
+  mediaTexts: string[];
+  tokens: DesignToken[];
+  focusRules: string[];
+  ruleCount: number;
+}
+
+/**
+ * Lightweight text parse for stylesheets the page cannot read through the CSSOM (cross-origin
+ * without CORS). It finds breakpoints, :root custom properties and outline-removing :focus rules;
+ * it does not resolve @import or nested at-rules beyond what a flat rule scan sees.
+ */
+export function parseCssText(css: string): ParsedCss {
+  const text = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const mediaTexts = [...text.matchAll(/@media\s+([^{]+)\{/g)].map((m) => m[1].trim());
+  const tokens = new Map<string, DesignToken>();
+  const focusRules: string[] = [];
+  let ruleCount = 0;
+
+  for (const m of text.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selector = m[1].trim();
+    const body = m[2];
+    if (!selector || selector.startsWith('@')) continue;
+    ruleCount++;
+    if (/(^|,)\s*(:root|html|:host)\s*(,|$)/.test(selector)) {
+      for (const d of body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);?/g)) {
+        const value = d[2].trim();
+        if (value && !tokens.has(d[1])) tokens.set(d[1], { name: d[1], value, kind: classifyToken(value) });
+      }
+    }
+    if (/:focus(-visible)?\b/.test(selector)) {
+      const removes = /outline(-style|-width)?\s*:\s*(none|0(px)?)\b/.test(body);
+      const alternative = /(box-shadow|border(-color)?|background(-color)?|text-decoration)\s*:/.test(body);
+      if (removes && !alternative) focusRules.push(selector.replace(/\s+/g, ' '));
+    }
+  }
+  return { mediaTexts, tokens: [...tokens.values()], focusRules: focusRules.slice(0, 20), ruleCount };
+}

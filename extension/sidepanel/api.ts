@@ -24,6 +24,7 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, label: string): 
 const DEFAULT_TIMEOUT = 30_000;
 const TIMEOUTS: Record<string, number> = {
   'page:collect': 60_000,
+  'page:assets': 60_000,
   'shot:warmup': 90_000,
   'bg:probe': 45_000,
   'bg:capture': 600_000, // very tall pages are captured tile by tile at ~2 tiles/second

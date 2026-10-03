@@ -1,0 +1,57 @@
+/* Full-window device simulator. Tokens, buttons, chips and the device grid come from the side panel's styles.css. */
+html, body { overflow: hidden; }
+body { min-width: 0; }
+
+.sim { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); height: 100%; }
+.sim-top { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--background); }
+.sim-brand { font: 600 14px/1 var(--font-display); letter-spacing: -0.015em; white-space: nowrap; margin-right: 4px; }
+.sim-address { flex: 1 1 auto; min-width: 0; font-family: var(--mono); font-size: 12px; }
+.sim-top a.btn { text-decoration: none; color: inherit; }
+
+.sim-side { grid-row: 2; width: 372px; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid var(--border); background: var(--background); }
+.sim-main { grid-row: 2; grid-column: 2; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-width: 0; }
+.sim:not(:has(.sim-side)) .sim-main { grid-column: 1 / -1; }
+
+.sim-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 8px 14px; border-bottom: 1px solid var(--border); }
+.sim-info { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; min-width: 0; }
+.sim-info strong { font: 600 13px/1.3 var(--font-display); }
+.sim-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.sim-zoom { display: inline-flex; align-items: center; gap: 4px; }
+.sim-zoom select { width: auto; height: 28px; font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* The stage: the device is centred and the canvas scrolls when it is zoomed beyond the window. */
+.sim-canvas {
+  display: flex; overflow: auto; padding: 28px; min-height: 0;
+  background: radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--foreground) 14%, transparent) 1px, transparent 0) 0 0 / 18px 18px, var(--muted);
+}
+.sim-sizer { margin: auto; flex: none; position: relative; }
+.sim-device { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+
+.sim-body { position: absolute; top: 0; background: #17171a; box-shadow: inset 0 0 0 2px #2f2f35, 0 18px 50px -12px hsl(240 10% 4% / 0.55), 0 4px 10px hsl(240 10% 4% / 0.25); }
+.sim-screen { background: #fff; overflow: hidden; position: relative; }
+.sim-screen iframe { display: block; border: 0; background: #fff; width: 100%; height: 100%; }
+/* Phone/tablet camera hint. Sits in the bezel so it never covers page content. */
+.sim-device.phone .sim-body::after, .sim-device.tablet .sim-body::after { content: ""; position: absolute; top: 5px; left: 50%; width: 38px; height: 4px; margin-left: -19px; border-radius: 3px; background: #2f2f35; }
+.sim-device.tablet .sim-body::after { top: 8px; width: 7px; height: 7px; margin-left: -3.5px; border-radius: 50%; }
+
+.sim-stand { position: absolute; display: flex; flex-direction: column; align-items: center; }
+.sim-neck { width: 9%; max-width: 160px; min-width: 24px; flex: 1; background: linear-gradient(90deg, #3a3a40, #55555c 50%, #3a3a40); }
+.sim-foot { width: 22%; max-width: 420px; min-width: 70px; height: 6px; border-radius: 4px; background: #55555c; flex: none; }
+.sim-base { display: block; width: 100%; height: 100%; background: linear-gradient(#55555c, #3a3a40); border-radius: 0 0 22px 22px; box-shadow: 0 6px 12px hsl(240 10% 4% / 0.3); }
+
+.sim-empty { margin: auto; display: flex; flex-direction: column; gap: 6px; text-align: center; max-width: 360px; }
+
+.sim-status { display: flex; flex-wrap: wrap; gap: 2px 14px; padding: 6px 14px; border-top: 1px solid var(--border); }
+.sim-loading { color: var(--info-fg); font-weight: 500; }
+.sim-warn { color: var(--warning-fg); }
+
+/* Narrow windows: the device list becomes a drawer over the stage. */
+@media (max-width: 759px) {
+  .sim { grid-template-columns: minmax(0, 1fr); }
+  .sim-side { position: absolute; z-index: 5; top: 49px; bottom: 0; left: 0; width: min(372px, 100%); box-shadow: var(--shadow-lg); }
+  .sim-main, .sim:not(:has(.sim-side)) .sim-main { grid-column: 1; }
+  .sim-brand { display: none; }
+}
+
+.sim-close { margin-left: 4px; border-color: color-mix(in srgb, var(--destructive) 45%, var(--input)); color: var(--destructive-fg); flex: none; }
+.sim-close:hover:not(:disabled) { background: color-mix(in srgb, var(--destructive) 12%, transparent); }

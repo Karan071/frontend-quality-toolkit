@@ -1,14 +1,17 @@
 import { ALL_KINDS } from '@ftk/audit-core';
 import type { PageSnapshot, ProbeInfo, Severity } from '@ftk/audit-core';
 import { toMarkdown } from '@ftk/recommendation-engine';
-import { DEVICE_PRESETS, summarizeViewportTest } from '@ftk/responsive-analyzer';
+import { CORE_PRESET_IDS, DEVICE_PRESETS, summarizeViewportTest } from '@ftk/responsive-analyzer';
 import type { DevicePreset } from '@ftk/responsive-analyzer';
 import type { ShotType } from '@ftk/screenshot-engine';
 import type { EnrichedFinding } from '@ftk/audit-core';
 import { PANEL_PORT, errorMessage } from '../shared/messages';
-import { applyProbes, buildAudit, urlsToProbe } from '../shared/audit';
+import { applyExternalCss, applyProbes, buildAudit, externalSheetUrls, urlsToProbe } from '../shared/audit';
 import { deleteScreenshot, clearScreenshots, listScreenshots } from '../shared/store';
 import { callBg, callPage, downloadBlob, ensureContent, isRestricted, onBroadcast, sleep } from './api';
+import { buildZip } from '@ftk/asset-extractor/zip';
+import type { AssetSample } from '@ftk/asset-extractor';
+import { downloadName, fetchAssetBytes } from './assets';
 import { currentAudit, currentBaseline, getState, setState } from './state';
 import type { AppliedFix, RouteId, Settings, Theme, Toast } from './state';
 
@@ -138,6 +141,7 @@ function onNavigationStart(tab: chrome.tabs.Tab) {
     highlightedId: null,
     vitals: null,
     viewportTests: [],
+    assets: null,
   });
 }
 
@@ -152,7 +156,7 @@ export async function setTarget(tab: chrome.tabs.Tab) {
   }
   setState((s) => ({
     tab: { id, url, title: tab.title ?? '', status: 'loading' },
-    ...(switching ? { selection: null, picking: false, fixes: {}, highlightedId: null, vitals: null, viewportTests: [], emulation: { active: false } } : {}),
+    ...(switching ? { selection: null, picking: false, fixes: {}, highlightedId: null, vitals: null, viewportTests: [], emulation: { active: false }, assets: null } : {}),
     auditError: null,
   }));
   try {
@@ -197,6 +201,7 @@ export async function saveSettings(patch: Partial<Settings>) {
 // ───────────────────────────── audit ─────────────────────────────
 
 const probeCache = new Map<string, ProbeInfo>();
+const cssCache = new Map<string, string>();
 
 export async function runAudit(opts: { quiet?: boolean } = {}) {
   if (getState().auditRunning) return;
@@ -213,6 +218,13 @@ export async function runAudit(opts: { quiet?: boolean } = {}) {
       Object.entries(probes).forEach(([u, p]) => probeCache.set(u, p));
     }
     snapshot = applyProbes(snapshot, Object.fromEntries(probeCache));
+
+    const sheets = externalSheetUrls(snapshot).filter((u) => !cssCache.has(u));
+    if (sheets.length) {
+      const fetched = await callBg('bg:fetch-css', { urls: sheets }).catch(() => ({}) as Record<string, string>);
+      Object.entries(fetched).forEach(([u, t]) => cssCache.set(u, t));
+    }
+    snapshot = applyExternalCss(snapshot, Object.fromEntries(cssCache));
     const emu = getState().emulation;
     if (emu.active && emu.width && emu.height) {
       snapshot = { ...snapshot, viewport: { ...snapshot.viewport, width: emu.width, height: emu.height } };
@@ -372,9 +384,11 @@ export async function reloadAndMeasure() {
 
 // ───────────────────────────── responsive lab ─────────────────────────────
 
-export async function applyEmulation(p: { label: string; width: number; height: number; mobile: boolean }) {
+type EmulationTarget = { label: string; width: number; height: number; mobile: boolean; dpr?: number };
+
+export async function applyEmulation(p: EmulationTarget) {
   const tabId = requireTab();
-  const state = await callBg('bg:emulate', { tabId, width: p.width, height: p.height, mobile: p.mobile });
+  const state = await callBg('bg:emulate', { tabId, width: p.width, height: p.height, mobile: p.mobile, dpr: p.dpr });
   setState({ emulation: { ...state, label: p.label } });
   await sleep(300);
 }
@@ -385,17 +399,17 @@ export async function resetEmulation() {
   setState({ emulation: state });
 }
 
-export async function testViewport(p: { label: string; width: number; height: number; mobile: boolean }) {
+export async function testViewport(p: EmulationTarget) {
   const tabId = requireTab();
   setState({ testing: p.label });
   try {
     await applyEmulation(p);
     await sleep(250);
-    const snap = await callPage(tabId, 'page:collect', { kinds: ['meta', 'overflow', 'css'] });
+    const snap = await callPage(tabId, 'page:collect', { kinds: ['meta', 'overflow', 'css', 'styles'] });
     // In mobile emulation Chrome widens the layout viewport to fit overflowing content,
     // so innerWidth is not the emulated width. Report what was requested.
     const viewport = { ...snap.viewport!, width: p.width, height: p.height };
-    const result = summarizeViewportTest(p.label, { meta: snap.meta!, viewport, overflow: snap.overflow!, css: snap.css });
+    const result = summarizeViewportTest(p.label, { meta: snap.meta!, viewport, overflow: snap.overflow!, css: snap.css, blocks: snap.typography?.blocks });
     setState((s) => ({
       viewportTests: [...s.viewportTests.filter((r) => !(r.label === result.label && r.width === result.width)), result].sort((a, b) => a.width - b.width),
     }));
@@ -405,14 +419,44 @@ export async function testViewport(p: { label: string; width: number; height: nu
   }
 }
 
-export async function testAllViewports() {
+/** Runs the overflow/readability checks at each preset in turn, then restores the previous emulation. */
+export async function testPresets(presets: EmulationTarget[]) {
   const before = getState().emulation;
-  for (const preset of DEVICE_PRESETS) await testViewport(preset);
-  if (before.active && before.width && before.height) {
-    await applyEmulation({ label: before.label ?? 'Custom', width: before.width, height: before.height, mobile: !!before.mobile });
-  } else {
-    await resetEmulation();
+  try {
+    for (const [i, preset] of presets.entries()) {
+      setState({ testProgress: { done: i, total: presets.length } });
+      await testViewport(preset);
+    }
+  } finally {
+    setState({ testProgress: null });
+    // Even if a size fails (timeout, navigation), never leave the tab stuck in an emulated size.
+    if (before.active && before.width && before.height) {
+      await applyEmulation({ label: before.label ?? 'Custom', width: before.width, height: before.height, mobile: !!before.mobile, dpr: before.dpr }).catch(() => undefined);
+    } else {
+      await resetEmulation().catch(() => undefined);
+    }
   }
+}
+
+export const testAllViewports = () => testPresets(DEVICE_PRESETS);
+export const testCoreViewports = () => testPresets(DEVICE_PRESETS.filter((p) => CORE_PRESET_IDS.includes(p.id)));
+
+/** Opens the full-screen device emulator (extension page) in a new foreground tab next to the current one. */
+export async function openSimulator(deviceId?: string, landscape = false) {
+  const { tab } = getState();
+  if (tab.id == null || tab.status === 'restricted' || !/^https?:/i.test(tab.url)) throw new Error('Open a regular web page (http/https) to preview it in the emulator.');
+  const params = new URLSearchParams({ url: tab.url });
+  if (deviceId) params.set('device', deviceId);
+  if (landscape) params.set('landscape', '1');
+  const source = await chrome.tabs.get(tab.id);
+  const created = await chrome.tabs.create({
+    url: chrome.runtime.getURL(`simulator.html?${params}`),
+    active: true,
+    index: source.index + 1,
+    openerTabId: source.id, // closing the emulator returns to the page it was opened from
+    windowId: source.windowId,
+  });
+  if (created.windowId != null) await chrome.windows.update(created.windowId, { focused: true }).catch(() => undefined);
 }
 
 export function presetOf(label: string): DevicePreset | undefined {
@@ -436,7 +480,7 @@ export async function takeScreenshot(opts: { type: ShotType; selector?: string; 
   setState({ shotBusy: { type: opts.type, done: 0, total: opts.type === 'viewport' ? 1 : 0 } });
   try {
     await ensureContent(tabId);
-    const { id } = await callBg('bg:capture', {
+    const { id, ids } = await callBg('bg:capture', {
       tabId,
       type: opts.type,
       format: settings.format,
@@ -447,12 +491,11 @@ export async function takeScreenshot(opts: { type: ShotType; selector?: string; 
     });
     await reloadShots();
     setState({ lastShotId: id });
+    // The capture bar already announces the result (with Copy / Save / Open), so no toast for the
+    // common case: toasts float over the controls. Only unusual outcomes get one.
     const shot = getState().screenshots.find((s) => s.id === id);
-    toast(`Screenshot captured${shot ? ` — ${shot.width} × ${shot.height}` : ''}`, 'success', {
-      label: 'Open',
-      run: () => navigate('screenshots'),
-    });
-    shot?.warnings.forEach((w) => toast(w, 'info'));
+    if (ids.length > 1) toast(`Page was taller than one image can hold: saved ${ids.length} full-resolution parts`, 'info', { label: 'Open', run: () => navigate('screenshots') });
+    shot?.warnings.filter((w) => !/saved as \d+ full-resolution parts/.test(w)).forEach((w) => toast(w, 'info'));
   } catch (e) {
     toast(errorMessage(e), 'error');
   } finally {
@@ -507,5 +550,82 @@ export function downloadAudit(kind: 'md' | 'json') {
   } else {
     const { snapshot: _snapshot, ...rest } = audit;
     downloadBlob(new Blob([JSON.stringify({ ...rest, viewport: audit.snapshot.viewport, vitals: audit.snapshot.vitals }, null, 2)], { type: 'application/json' }), `${host}-audit.json`);
+  }
+}
+
+
+// ───────────────────────────── assets ─────────────────────────────
+
+const assetCancel = { cancelled: false };
+
+/** Finds every asset the page uses, then fills in file sizes in the background. */
+export async function scanAssets() {
+  const tabId = requireTab();
+  if (getState().assetsScanning) return;
+  setState({ assetsScanning: true });
+  try {
+    await ensureContent(tabId);
+    const { assets, truncated } = await callPage(tabId, 'page:assets');
+    setState({ assets: { tabId, url: getState().tab.url, scannedAt: Date.now(), items: assets, truncated } });
+    void probeAssetSizes(tabId);
+  } finally {
+    setState({ assetsScanning: false });
+  }
+}
+
+/** HEAD-probes assets whose size is unknown (cross-origin hides it from the page). */
+async function probeAssetSizes(tabId: number) {
+  for (let round = 0; round < 4; round++) {
+    const scan = getState().assets;
+    if (!scan || scan.tabId !== tabId) return;
+    const todo = scan.items.filter((a) => a.bytes == null && /^https?:/.test(a.url)).slice(0, 150);
+    if (!todo.length) return;
+    const probes = await callBg('bg:probe', { urls: todo.map((a) => a.url) }).catch(() => ({}) as Record<string, { size?: number; contentType?: string }>);
+    setState((s) => {
+      if (!s.assets || s.assets.tabId !== tabId) return {};
+      const items = s.assets.items.map((a) => {
+        if (!todo.some((t) => t.id === a.id)) return a;
+        const p = probes[a.url];
+        // 0 marks "asked, server did not say" so the same asset is not probed again.
+        return { ...a, bytes: p?.size ?? 0, contentType: a.contentType ?? p?.contentType };
+      });
+      return { assets: { ...s.assets, items } };
+    });
+  }
+}
+
+export async function downloadAsset(a: AssetSample) {
+  const got = await fetchAssetBytes(a);
+  downloadBlob(new Blob([got.bytes as BlobPart], { type: got.contentType ?? 'application/octet-stream' }), downloadName(a, got.contentType));
+}
+
+export function cancelAssetDownload() {
+  assetCancel.cancelled = true;
+}
+
+/** Bundles the given assets into one ZIP (folders by type + assets.json) and saves it. */
+export async function downloadAssetsZip(list: AssetSample[], label: string) {
+  if (!list.length || getState().assetProgress) return;
+  assetCancel.cancelled = false;
+  const tab = getState().tab;
+  setState({ assetProgress: { done: 0, total: list.length, failed: 0, bytes: 0, label } });
+  try {
+    const result = await buildZip(list, fetchAssetBytes, {
+      signal: assetCancel,
+      source: { url: tab.url, title: tab.title },
+      onProgress: (p) => setState({ assetProgress: { ...p, label } }),
+    });
+    let host = 'page';
+    try {
+      host = new URL(tab.url).hostname.replace(/^www\./, '').replace(/[^a-z0-9]+/gi, '-');
+    } catch { /* keep default */ }
+    downloadBlob(result.blob, `${host}-assets.zip`);
+    const failed = result.failed.length;
+    toast(
+      `${result.cancelled ? 'Cancelled — saved ' : 'Saved '}${result.added} file${result.added === 1 ? '' : 's'} to ${host}-assets.zip${failed ? `; ${failed} could not be downloaded (listed in _failed.txt)` : ''}`,
+      failed || result.cancelled ? 'info' : 'success',
+    );
+  } finally {
+    setState({ assetProgress: null });
   }
 }

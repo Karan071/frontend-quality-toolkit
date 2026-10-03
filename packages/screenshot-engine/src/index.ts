@@ -62,6 +62,18 @@ export interface PrepareInfo {
   /** Tallest bottom-anchored fixed element; the last tile re-draws this much of the overlap. */
   bottomFixedHeight: number;
   warnings: string[];
+  /** Set when the document itself does not scroll but a large inner container does. */
+  scroller?: ScrollerInfo;
+}
+
+export interface ScrollerInfo {
+  /** For messages only. */
+  label: string;
+  /** Visible content box of the scroll container, in viewport px. */
+  rect: Rect;
+  /** Scroll size of the container's content. */
+  scrollWidth: number;
+  scrollHeight: number;
 }
 
 export interface ElementTarget {
@@ -78,6 +90,28 @@ export const MAX_CANVAS_SIDE = 16384;
 export const MAX_CANVAS_AREA = 16384 * 16384;
 /** Hard cap on captured document height (CSS px). */
 export const MAX_CAPTURE_HEIGHT = 40000;
+
+export interface PartPlan {
+  /** Output scale (device pixels per CSS px). Only reduced when the page is too *wide* for one canvas. */
+  scale: number;
+  /** Vertical slices of the region, in CSS px, each small enough for one canvas. */
+  parts: Rect[];
+}
+
+/**
+ * Splits a region into the fewest full-resolution vertical slices that each fit in a canvas,
+ * instead of shrinking one huge image. Width is only scaled down if a single row cannot fit.
+ */
+export function planParts(region: Rect, scale: number): PartPlan {
+  const s = Math.min(scale, MAX_CANVAS_SIDE / Math.max(region.width, 1));
+  const maxPx = Math.min(MAX_CANVAS_SIDE, Math.floor(MAX_CANVAS_AREA / Math.max(region.width * s, 1)));
+  const partH = Math.max(1, Math.floor(maxPx / s));
+  const parts: Rect[] = [];
+  for (let y = 0; y < region.height; y += partH) {
+    parts.push({ x: region.x, y: region.y + y, width: region.width, height: Math.min(partH, region.height - y) });
+  }
+  return { scale: s, parts: parts.length ? parts : [region] };
+}
 
 /** Largest scale ≤ `scale` that keeps a w×h CSS-px region inside canvas limits. */
 export function fitScale(width: number, height: number, scale: number): number {
@@ -190,11 +224,14 @@ export function screenshotName(opts: {
   width: number;
   height: number;
   selector?: string;
+  /** 1-based part index when one capture was split across several images. */
+  part?: { index: number; total: number };
 }): string {
   const host = hostSlug(opts.url);
   const ext = opts.format === 'jpeg' ? 'jpg' : 'png';
-  if (opts.type === 'element') return `${host}-element-${selectorSlug(opts.selector)}.${ext}`;
-  return `${host}-${opts.type}-${Math.round(opts.width)}x${Math.round(opts.height)}.${ext}`;
+  const suffix = opts.part && opts.part.total > 1 ? `-part${opts.part.index}of${opts.part.total}` : '';
+  if (opts.type === 'element') return `${host}-element-${selectorSlug(opts.selector)}${suffix}.${ext}`;
+  return `${host}-${opts.type}-${Math.round(opts.width)}x${Math.round(opts.height)}${suffix}.${ext}`;
 }
 
 export function buildMeta(
@@ -205,7 +242,7 @@ export function buildMeta(
     url: info.url,
     title: info.title,
     viewport: { width: Math.round(info.viewport.width), height: Math.round(info.viewport.height) },
-    deviceMode: deviceModeFor(info.viewport.width),
+    deviceMode: deviceModeFor(info.viewport.width, info.viewport.height),
     timestamp: new Date().toISOString(),
     type: req.type,
     selector: req.selector,

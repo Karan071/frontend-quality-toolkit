@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_CANVAS_AREA, MAX_CANVAS_SIDE, fitScale, hostSlug, planTiles, screenshotName, selectorSlug } from '@ftk/screenshot-engine';
+import { MAX_CANVAS_AREA, MAX_CANVAS_SIDE, fitScale, hostSlug, planParts, planTiles, screenshotName, selectorSlug } from '@ftk/screenshot-engine';
 import type { Rect, Tile } from '@ftk/screenshot-engine';
 
 const vp = { width: 400, height: 800 };
@@ -104,5 +104,40 @@ describe('naming', () => {
     expect(selectorSlug('body > ul > li:nth-of-type(3)')).toBe('li');
     expect(selectorSlug(undefined)).toBe('element');
     expect(hostSlug('not a url')).toBe('page');
+  });
+});
+
+describe('planParts', () => {
+  it('keeps a normal page in one part at full resolution', () => {
+    const plan = planParts({ x: 0, y: 0, width: 1440, height: 6840 }, 2);
+    expect(plan.parts).toHaveLength(1);
+    expect(plan.scale).toBe(2);
+  });
+
+  it('splits a very tall page into full-resolution parts instead of scaling it down', () => {
+    const region = { x: 0, y: 0, width: 1280, height: 40000 };
+    const plan = planParts(region, 2);
+    expect(plan.scale).toBe(2);
+    expect(plan.parts.length).toBeGreaterThan(1);
+    for (const p of plan.parts) {
+      expect(p.height * plan.scale).toBeLessThanOrEqual(MAX_CANVAS_SIDE);
+      expect(p.width * p.height * plan.scale * plan.scale).toBeLessThanOrEqual(MAX_CANVAS_AREA);
+    }
+    // Parts tile the region exactly: contiguous, no gaps or overlaps.
+    expect(plan.parts[0].y).toBe(0);
+    plan.parts.slice(1).forEach((p, i) => expect(p.y).toBe(plan.parts[i].y + plan.parts[i].height));
+    const last = plan.parts[plan.parts.length - 1];
+    expect(last.y + last.height).toBe(40000);
+  });
+
+  it('only scales down when a single row is too wide for a canvas', () => {
+    const plan = planParts({ x: 0, y: 0, width: 10000, height: 500 }, 2);
+    expect(plan.scale).toBeLessThan(2);
+    expect(10000 * plan.scale).toBeLessThanOrEqual(MAX_CANVAS_SIDE);
+  });
+
+  it('names parts', () => {
+    expect(screenshotName({ url: 'https://e.com', type: 'fullpage', format: 'png', width: 1280, height: 40000, part: { index: 2, total: 3 } })).toBe('e-com-fullpage-1280x40000-part2of3.png');
+    expect(screenshotName({ url: 'https://e.com', type: 'fullpage', format: 'png', width: 1, height: 2, part: { index: 1, total: 1 } })).toBe('e-com-fullpage-1x2.png');
   });
 });

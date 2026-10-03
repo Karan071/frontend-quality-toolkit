@@ -9,6 +9,7 @@ import { analyzeColors, analyzePalette } from '@ftk/color-analyzer';
 import { analyzeTypography } from '@ftk/typography-analyzer';
 import { analyzeUx } from '@ftk/ux-analyzer';
 import { enrich, summarizeByCategory } from '@ftk/recommendation-engine';
+import { parseBreakpoints, parseCssText, sourceLabel } from '@ftk/css-analyzer';
 
 export interface AuditResult {
   url: string;
@@ -41,6 +42,50 @@ export function applyProbes(snapshot: PageSnapshot, probes: Record<string, Probe
     return img.bytes == null && p ? { ...img, bytes: p.size, contentType: p.contentType } : img;
   });
   return { ...snapshot, resources, images };
+}
+
+/** Cross-origin stylesheet URLs whose text should be fetched (CSSOM access was denied). */
+export function externalSheetUrls(snapshot: PageSnapshot): string[] {
+  return snapshot.css.stylesheets.filter((s) => !s.accessible && !s.parsed && s.href && /^https?:/.test(s.href)).map((s) => s.href!);
+}
+
+/**
+ * Folds the text of cross-origin stylesheets into the snapshot: breakpoints, design tokens and
+ * focus-outline removals become visible, and the sheet no longer counts as unreadable.
+ */
+export function applyExternalCss(snapshot: PageSnapshot, texts: Record<string, string>): PageSnapshot {
+  const media: string[] = [];
+  const tokens = new Map(snapshot.css.tokens.map((t) => [t.name, t]));
+  const focusRules = [...snapshot.a11y.focusRules];
+  const stylesheets = snapshot.css.stylesheets.map((sheet) => {
+    const text = sheet.href ? texts[sheet.href] : undefined;
+    if (sheet.accessible || text === undefined) return sheet;
+    const parsed = parseCssText(text);
+    media.push(...parsed.mediaTexts);
+    parsed.tokens.forEach((t) => !tokens.has(t.name) && tokens.set(t.name, t));
+    parsed.focusRules.forEach((selector) => focusRules.push({ selector, source: sourceLabel(sheet.href) }));
+    return { ...sheet, parsed: true, ruleCount: parsed.ruleCount };
+  });
+  if (stylesheets.every((s, i) => s === snapshot.css.stylesheets[i])) return snapshot;
+
+  // Merge breakpoint counts by (kind, px).
+  const merged = new Map(snapshot.css.breakpoints.map((b) => [`${b.kind}:${b.px}`, { ...b }]));
+  for (const b of parseBreakpoints(media)) {
+    const hit = merged.get(`${b.kind}:${b.px}`);
+    if (hit) hit.uses += b.uses;
+    else merged.set(`${b.kind}:${b.px}`, b);
+  }
+  return {
+    ...snapshot,
+    css: {
+      ...snapshot.css,
+      stylesheets,
+      tokens: [...tokens.values()],
+      breakpoints: [...merged.values()].sort((a, b) => a.px - b.px),
+      inaccessibleSheets: stylesheets.filter((s) => !s.accessible && !s.parsed).length,
+    },
+    a11y: { ...snapshot.a11y, focusRules: focusRules.slice(0, 20) },
+  };
 }
 
 export function analyzeSnapshot(s: PageSnapshot): Finding[] {

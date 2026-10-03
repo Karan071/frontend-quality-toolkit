@@ -52,6 +52,9 @@ export const RULES: Record<string, RuleDoc> = {
     'Find the widest elements (highlighted) and give them max-width: 100%.',
     'Make images/video/iframes fluid: img, video { max-width: 100%; height: auto }.',
     'Let long strings wrap with overflow-wrap: anywhere; wrap wide tables in a scroll container.'),
+  'resp.stretched-content': r(5, 'Lines longer than ~80 characters are tiring to read; on a 49″ monitor or a TV the whole page becomes one wall of text.',
+    'Give the reading column a max-width in ch units (65–75ch) and centre it.',
+    'Add a larger breakpoint (min-width: 1600px / 2400px) that caps the page container and scales type up for TVs.'),
   'resp.no-breakpoints': r(2, 'Pure fluid layouts can work, but most designs need at least one breakpoint.',
     'Confirm layouts adapt using the Responsive Lab; add @media (min-width) rules where content breaks.'),
 

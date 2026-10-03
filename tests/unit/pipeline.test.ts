@@ -100,3 +100,50 @@ describe('audit pipeline', () => {
     expect(diff.byRule[0].ruleId).toBe('a11y.img-alt-missing');
   });
 });
+
+import { parseCssText } from '@ftk/css-analyzer';
+import { applyExternalCss, externalSheetUrls } from '../../extension/shared/audit';
+
+describe('cross-origin stylesheet text', () => {
+  const css = `
+    /* comment @media (min-width: 1px) { } */
+    :root { --brand: #3b5bdb; --space-4: 16px; --font: "Inter", sans-serif; }
+    @media (min-width: 768px) { :root { --gap: 24px; } .a { color: red; } }
+    @media (max-width: 599.98px) { .b { display: none; } }
+    button:focus { outline: none; }
+    a:focus-visible { outline: 0; box-shadow: 0 0 0 2px blue; }
+    input:focus { outline: none; border-color: blue; }
+  `;
+
+  it('extracts breakpoints, tokens and outline-removing focus rules', () => {
+    const p = parseCssText(css);
+    expect(p.mediaTexts).toEqual(['(min-width: 768px)', '(max-width: 599.98px)']);
+    expect(p.tokens.map((t) => t.name)).toEqual(['--brand', '--space-4', '--font', '--gap']);
+    expect(p.tokens.find((t) => t.name === '--brand')?.kind).toBe('color');
+    expect(p.focusRules).toEqual(['button:focus']); // the others provide an alternative indicator
+    expect(p.ruleCount).toBeGreaterThan(5);
+  });
+
+  it('merges parsed sheets into the snapshot and clears the unreadable count', () => {
+    const snap = snapshot({
+      css: {
+        stylesheets: [
+          { href: 'https://cdn.x.com/site.css', inlineBytes: 0, media: null, inHead: true, accessible: false, ruleCount: null },
+          { href: 'https://cdn.x.com/gone.css', inlineBytes: 0, media: null, inHead: true, accessible: false, ruleCount: null },
+          { href: null, inlineBytes: 10, media: null, inHead: true, accessible: true, ruleCount: 2 },
+        ],
+        breakpoints: [{ px: 768, kind: 'min', uses: 1 }],
+        tokens: [], inaccessibleSheets: 2,
+      },
+    });
+    expect(externalSheetUrls(snap)).toEqual(['https://cdn.x.com/site.css', 'https://cdn.x.com/gone.css']);
+    const out = applyExternalCss(snap, { 'https://cdn.x.com/site.css': css });
+    expect(out.css.inaccessibleSheets).toBe(1); // the one that could not be fetched stays unreadable
+    expect(out.css.stylesheets[0]).toMatchObject({ parsed: true });
+    expect(out.css.breakpoints.find((b) => b.px === 768)?.uses).toBe(2);
+    expect(out.css.breakpoints.map((b) => b.px)).toEqual([600, 768]);
+    expect(out.css.tokens).toHaveLength(4);
+    expect(out.a11y.focusRules[0]).toMatchObject({ selector: 'button:focus', source: 'site.css' });
+    expect(applyExternalCss(snap, {})).toBe(snap); // nothing fetched → untouched
+  });
+});

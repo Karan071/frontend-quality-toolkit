@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>App shell</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { height: 100%; margin: 0; overflow: hidden; font: 16px system-ui; }
+  #top { position: fixed; top: 0; left: 0; right: 0; height: 50px; background: #ff00ff; z-index: 5; }
+  #app { position: absolute; top: 50px; left: 0; right: 0; bottom: 0; overflow-y: auto; }
+  .blk { height: 600px; display: flex; align-items: center; justify-content: center; font: 700 40px system-ui; color: #fff; }
+</style></head>
+<body>
+  <div id="top"></div>
+  <div id="app">
+    <div class="blk" style="background:#e03131">1</div><div class="blk" style="background:#2f9e44">2</div>
+    <div class="blk" style="background:#1971c2">3</div><div class="blk" style="background:#f08c00">4</div>
+    <div class="blk" style="background:#6741d9">5</div>
+  </div>
+</body></html>

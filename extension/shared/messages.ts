@@ -1,5 +1,6 @@
 import type { CollectKind, PageSnapshot, ProbeInfo, Severity, VitalsSnapshot, ViewportInfo } from '@ftk/audit-core';
 import type { ElementInfo, MatchedRule } from '@ftk/dom-analyzer';
+import type { AssetSample } from '@ftk/asset-extractor';
 import type { CaptureRequest, ElementTarget, PrepareInfo } from '@ftk/screenshot-engine';
 
 /** Panel → content script. Sent with chrome.tabs.sendMessage. */
@@ -7,6 +8,7 @@ export interface PageRequests {
   'page:ping': { req: Record<string, never>; res: { url: string; title: string } };
   'page:collect': { req: { kinds: CollectKind[] }; res: Partial<PageSnapshot> & { truncated?: boolean } };
   'page:vitals': { req: Record<string, never>; res: VitalsSnapshot };
+  'page:assets': { req: Record<string, never>; res: { assets: AssetSample[]; truncated: boolean } };
   'page:viewport': { req: Record<string, never>; res: ViewportInfo };
   'page:describe': {
     req: { selector: string; all?: boolean };
@@ -33,15 +35,17 @@ export interface EmulationState {
   width?: number;
   height?: number;
   mobile?: boolean;
+  dpr?: number;
 }
 
 /** Panel → service worker. Sent with chrome.runtime.sendMessage. */
 export interface BackgroundRequests {
   'bg:probe': { req: { urls: string[] }; res: Record<string, ProbeInfo> };
-  'bg:emulate': { req: { tabId: number; width: number; height: number; mobile: boolean }; res: EmulationState };
+  'bg:fetch-css': { req: { urls: string[] }; res: Record<string, string> };
+  'bg:emulate': { req: { tabId: number; width: number; height: number; mobile: boolean; dpr?: number }; res: EmulationState };
   'bg:emulate-clear': { req: { tabId: number }; res: EmulationState };
   'bg:emulation-state': { req: { tabId: number }; res: EmulationState };
-  'bg:capture': { req: CaptureRequest; res: { id: string } };
+  'bg:capture': { req: CaptureRequest; res: { id: string; ids: string[] } };
   'bg:reload': { req: { tabId: number; bypassCache?: boolean }; res: Record<string, never> };
   'bg:cleanup': { req: { tabId: number }; res: Record<string, never> };
 }

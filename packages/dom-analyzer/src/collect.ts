@@ -11,6 +11,32 @@ export function isToolkitNode(el: Element): boolean {
   return !!el.id && el.id.startsWith(TOOLKIT_ID_PREFIX);
 }
 
+// ───────────────────────────── Shadow DOM helpers ─────────────────────────────
+
+/** Separates the host selector from the selector inside its open shadow root. */
+export const SHADOW_SEP = ' >>> ';
+
+type SelectorRoot = Document | ShadowRoot;
+
+export function rootOf(el: Element): SelectorRoot {
+  return el.getRootNode() as SelectorRoot;
+}
+
+/** Parent element, crossing a shadow boundary up to the host. */
+export function parentOf(el: Element): Element | null {
+  if (el.parentElement) return el.parentElement;
+  const root = el.getRootNode();
+  return root instanceof ShadowRoot ? root.host : null;
+}
+
+/** Every element under `root`, descending into open shadow roots (host first, then its shadow tree). */
+export function* elementsIn(root: ParentNode): Generator<Element> {
+  for (const el of Array.from(root.querySelectorAll('*'))) {
+    yield el;
+    if (el.shadowRoot) yield* elementsIn(el.shadowRoot);
+  }
+}
+
 // ───────────────────────────── Selectors ─────────────────────────────
 
 const selectorCache = new WeakMap<Element, string>();
@@ -21,12 +47,12 @@ function looksGenerated(cls: string): boolean {
   return cls.length > 28 || (cls.match(/\d/g)?.length ?? 0) > 3;
 }
 
-function segment(el: Element): string {
+function segment(el: Element, root: SelectorRoot): string {
   const tag = el.localName;
   if (el.id) {
     const sel = `#${cssEscape(el.id)}`;
     try {
-      if (el.ownerDocument.querySelectorAll(sel).length === 1) return sel;
+      if (root.querySelectorAll(sel).length === 1) return sel;
     } catch {
       /* fall through */
     }
@@ -35,7 +61,7 @@ function segment(el: Element): string {
     .filter((c) => !c.startsWith(TOOLKIT_ID_PREFIX) && !looksGenerated(c))
     .slice(0, 2);
   let seg = tag + classes.map((c) => `.${cssEscape(c)}`).join('');
-  const parent = el.parentElement;
+  const parent = el.parentNode as ParentNode | null;
   if (parent) {
     const same = Array.from(parent.children).filter((s) => s.matches(seg));
     if (same.length > 1) seg += `:nth-of-type(${indexOfType(el)})`;
@@ -51,46 +77,53 @@ function indexOfType(el: Element): number {
   return i;
 }
 
+/** Shortest selector that is unique inside `root` (a document or one shadow root). */
+function selectorWithin(el: Element, root: SelectorRoot): string {
+  const stop = root instanceof Document ? root.documentElement : null;
+  const parts: string[] = [];
+  for (let cur: Element | null = el; cur && cur !== stop; cur = cur.parentElement) {
+    const seg = segment(cur, root);
+    parts.unshift(seg);
+    const candidate = parts.join(' > ');
+    try {
+      if (root.querySelectorAll(candidate).length === 1) return candidate;
+    } catch {
+      /* invalid selector, keep climbing */
+    }
+    if (seg.startsWith('#')) return candidate;
+  }
+  return parts.join(' > ');
+}
+
 /**
- * Shortest selector (within the light DOM) that resolves to exactly this
- * element. Climbs ancestors until it is unique.
+ * Shortest selector that resolves to exactly this element. Elements inside open shadow roots
+ * get `host >>> inner` selectors, which `queryAllSafe` knows how to resolve.
  */
 export function uniqueSelector(el: Element): string {
   const hit = selectorCache.get(el);
   if (hit) return hit;
-  const doc = el.ownerDocument;
-  if (el === doc.documentElement) return 'html';
-  if (el === doc.body) return 'body';
-
-  const parts: string[] = [];
-  let cur: Element | null = el;
-  let result = '';
-  while (cur && cur !== doc.documentElement) {
-    const seg = segment(cur);
-    parts.unshift(seg);
-    const candidate = parts.join(' > ');
-    try {
-      if (doc.querySelectorAll(candidate).length === 1) {
-        result = candidate;
-        break;
-      }
-    } catch {
-      /* invalid selector, keep climbing */
-    }
-    if (seg.startsWith('#')) {
-      result = candidate;
-      break;
-    }
-    cur = cur.parentElement;
-  }
-  if (!result) result = parts.join(' > ');
+  const root = rootOf(el);
+  let result: string;
+  if (root instanceof ShadowRoot) {
+    result = `${uniqueSelector(root.host)}${SHADOW_SEP}${selectorWithin(el, root)}`;
+  } else if (el === root.documentElement) result = 'html';
+  else if (el === root.body) result = 'body';
+  else result = selectorWithin(el, root);
   selectorCache.set(el, result);
   return result;
 }
 
+/** querySelectorAll that understands `host >>> inner` shadow-piercing selectors. */
 export function queryAllSafe(selector: string, limit = 50): Element[] {
   try {
-    return Array.from(document.querySelectorAll(selector)).slice(0, limit);
+    const parts = selector.split(SHADOW_SEP).map((p) => p.trim());
+    let roots: ParentNode[] = [document];
+    for (let i = 0; i < parts.length; i++) {
+      const matches = roots.flatMap((r) => Array.from(r.querySelectorAll(parts[i])));
+      if (i === parts.length - 1) return matches.slice(0, limit);
+      roots = matches.map((m) => m.shadowRoot).filter((r): r is ShadowRoot => !!r);
+    }
+    return [];
   } catch {
     return [];
   }
@@ -127,7 +160,7 @@ export interface ResolvedBackground {
 export function resolveBackground(el: Element): ResolvedBackground {
   const layers: ReturnType<typeof parseColor>[] = [];
   let uncertain = false;
-  for (let cur: Element | null = el; cur; cur = cur.parentElement) {
+  for (let cur: Element | null = el; cur; cur = parentOf(cur)) {
     const cs = getComputedStyle(cur);
     const bg = parseColor(normalizeColor(cs.backgroundColor));
     if (bg && bg.a > 0) layers.push(bg);
@@ -157,7 +190,7 @@ export function makeBackgroundResolver(): (el: Element) => BackgroundResult {
   const resolve = (el: Element): BackgroundResult => {
     const hit = cache.get(el);
     if (hit) return hit;
-    const parent = el.parentElement;
+    const parent = parentOf(el);
     const base: BackgroundResult = parent
       ? resolve(parent)
       : { rgba: { r: 255, g: 255, b: 255, a: 1 }, uncertain: false, opacity: 1 };
@@ -181,7 +214,7 @@ export function elementContrast(el: Element, cs = getComputedStyle(el)) {
   const bg = parseColor(color);
   if (!bg) return null;
   let opacity = 1;
-  for (let cur: Element | null = el; cur; cur = cur.parentElement) {
+  for (let cur: Element | null = el; cur; cur = parentOf(cur)) {
     opacity *= parseFloat(getComputedStyle(cur).opacity || '1');
   }
   const fg = composite({ ...fgRaw, a: fgRaw.a * opacity }, bg);
@@ -293,7 +326,7 @@ export function boxModel(cs: CSSStyleDeclaration, rect: DOMRect) {
 }
 
 function isInFixedContext(el: Element): boolean {
-  for (let cur: Element | null = el; cur; cur = cur.parentElement) {
+  for (let cur: Element | null = el; cur; cur = parentOf(cur)) {
     const pos = getComputedStyle(cur).position;
     if (pos === 'fixed' || pos === 'sticky') return true;
   }
@@ -318,7 +351,7 @@ export function describeElement(el: Element, all = false): ElementInfo {
       }));
 
   const path: ElementInfo['path'] = [];
-  for (let cur: Element | null = el; cur; cur = cur.parentElement) {
+  for (let cur: Element | null = el; cur; cur = parentOf(cur)) {
     path.unshift({
       selector: uniqueSelector(cur),
       label: elementLabel(cur.localName, cur.id || null, Array.from(cur.classList).slice(0, 2)),
@@ -345,7 +378,7 @@ export function describeElement(el: Element, all = false): ElementInfo {
     a11y: { role: implicitRole(el), name: accessibleName(el).slice(0, 120) },
     path,
     childCount: el.children.length,
-    hasParent: !!el.parentElement && el !== document.documentElement,
+    hasParent: !!parentOf(el) && el !== document.documentElement,
     hasPrev: !!el.previousElementSibling,
     hasNext: !!el.nextElementSibling,
     contrast: contrast
@@ -358,7 +391,7 @@ export function describeElement(el: Element, all = false): ElementInfo {
 export function relativeElement(el: Element, rel: 'parent' | 'child' | 'next' | 'prev'): Element | null {
   switch (rel) {
     case 'parent':
-      return el.parentElement && el !== document.documentElement ? el.parentElement : null;
+      return parentOf(el) && el !== document.documentElement ? parentOf(el) : null;
     case 'child':
       return Array.from(el.children).find((c) => !isToolkitNode(c)) ?? null;
     case 'next':
@@ -405,7 +438,8 @@ const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'META', 'LINK', 'HEAD', 'TITLE', '
  * serves every analyzer.
  */
 export function walkDocument(visitors: Visitor<unknown>[], limit = 25000): { visited: number; truncated: boolean } {
-  const all = document.body ? [document.body, ...Array.from(document.body.querySelectorAll('*'))] : [];
+  // Descends into open shadow roots so web-component content is audited too.
+  const all = document.body ? [document.body, ...elementsIn(document.body)] : [];
   let visited = 0;
   for (const el of all) {
     if (visited >= limit) return { visited, truncated: true };

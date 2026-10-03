@@ -31,10 +31,11 @@ const configs = [
   { ...common, entryPoints: { content: 'extension/content/content.ts' }, format: 'iife' },
   { ...common, entryPoints: { sidepanel: 'extension/sidepanel/main.tsx' }, format: 'iife', jsx: 'automatic' },
   { ...common, entryPoints: { viewer: 'extension/viewer.ts' }, format: 'iife' },
+  { ...common, entryPoints: { simulator: 'extension/simulator/main.tsx' }, format: 'iife', jsx: 'automatic' },
 ];
 
 function copyStatic() {
-  for (const f of ['manifest.json', 'sidepanel.html', 'viewer.html']) cpSync(`extension/${f}`, `${out}/${f}`);
+  for (const f of ['manifest.json', 'sidepanel.html', 'viewer.html', 'simulator.html']) cpSync(`extension/${f}`, `${out}/${f}`);
   if (!existsSync('extension/icons/icon-128.png')) throw new Error('Run `node scripts/make-icons.mjs` first.');
   cpSync('extension/icons', `${out}/icons`, { recursive: true });
   cpSync('extension/fonts', `${out}/fonts`, { recursive: true });
@@ -47,7 +48,7 @@ if (watch) {
 } else {
   await Promise.all(configs.map((c) => build(c)));
   // Guard: Chrome silently refuses to load scripts it considers non-UTF-8 (e.g. noncharacters).
-  for (const f of ['content.js', 'service-worker.js', 'sidepanel.js', 'viewer.js']) {
+  for (const f of ['content.js', 'service-worker.js', 'sidepanel.js', 'viewer.js', 'simulator.js']) {
     const text = readFileSync(`${out}/${f}`, 'utf8');
     const bad = /[^\x00-\x7f]/.exec(text);
     if (bad) throw new Error(`${f} contains non-ASCII character U+${bad[0].codePointAt(0).toString(16)} near: ${text.slice(Math.max(0, bad.index - 40), bad.index + 10)}`);

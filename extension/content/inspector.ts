@@ -30,7 +30,8 @@ export class Inspector {
       e.stopImmediatePropagation();
     };
     const target = (e: Event): Element | null => {
-      const el = e.target as Element | null;
+      // composedPath()[0] is the real element even when the event was retargeted to a shadow host.
+      const el = (e.composedPath?.()[0] ?? e.target) as Element | null;
       return el && el.nodeType === 1 && !isToolkitNode(el) ? el : null;
     };
     const add = (type: string, fn: (e: Event) => void) => {

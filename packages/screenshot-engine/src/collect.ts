@@ -1,5 +1,5 @@
 import { anchorOf } from '@ftk/layout-analyzer';
-import { isToolkitNode } from '@ftk/dom-analyzer/collect';
+import { isToolkitNode, queryAllSafe } from '@ftk/dom-analyzer/collect';
 import type { PageDriver } from './engine';
 import type { ElementTarget, PrepareInfo } from './index';
 
@@ -37,6 +37,8 @@ interface Session {
   scroll: { x: number; y: number };
   style: HTMLStyleElement | null;
   marked: Element[];
+  /** Inner scroll container, when the document itself does not scroll. */
+  scroller: { el: Element; scrollLeft: number; scrollTop: number } | null;
 }
 
 export interface OverlayControl {
@@ -45,18 +47,28 @@ export interface OverlayControl {
   resume(): void;
 }
 
-/** Finds a large inner scroll container when the document itself does not scroll. */
-function findInnerScroller(): string | null {
+/**
+ * Finds the main inner scroll container when the document itself does not scroll
+ * (app-shell layouts). Picks the largest one that is mostly on screen.
+ */
+function findInnerScroller(): Element | null {
   const vh = innerHeight;
   const vw = innerWidth;
+  let best: { el: Element; area: number } | null = null;
   for (const el of Array.from(document.body?.querySelectorAll('*') ?? [])) {
     if (isToolkitNode(el)) continue;
     const s = getComputedStyle(el);
     if (!/(auto|scroll)/.test(s.overflowY) || el.scrollHeight <= el.clientHeight + 100) continue;
-    if (el.clientHeight >= vh * 0.6 && el.clientWidth >= vw * 0.5) return el.localName + (el.id ? `#${el.id}` : '');
+    if (el.clientHeight < vh * 0.5 || el.clientWidth < vw * 0.4) continue;
+    const r = el.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > vh) continue;
+    const area = el.clientWidth * el.clientHeight;
+    if (!best || area > best.area) best = { el, area };
   }
-  return null;
+  return best?.el ?? null;
 }
+
+const describe = (el: Element) => el.localName + (el.id ? `#${el.id}` : el.classList[0] ? `.${el.classList[0]}` : '');
 
 export function createShotDriver(overlay: OverlayControl): PageDriver {
   let session: Session | null = null;
@@ -70,6 +82,9 @@ export function createShotDriver(overlay: OverlayControl): PageDriver {
     });
     document.documentElement.removeAttribute('data-ftk-hide');
     window.scrollTo({ left: session.scroll.x, top: session.scroll.y, behavior: 'instant' as ScrollBehavior });
+    if (session.scroller) {
+      session.scroller.el.scrollTo({ left: session.scroller.scrollLeft, top: session.scroller.scrollTop, behavior: 'instant' as ScrollBehavior });
+    }
     overlay.resume();
     session = null;
   };
@@ -107,12 +122,21 @@ export function createShotDriver(overlay: OverlayControl): PageDriver {
         }
       }
 
-      session = { scroll: { x: scrollX, y: scrollY }, style, marked };
+      session = { scroll: { x: scrollX, y: scrollY }, style, marked, scroller: null };
       const doc = docSize();
+      let scroller: PrepareInfo['scroller'];
       if (mode === 'fullpage' && doc.height <= vh * 1.05) {
         const inner = findInnerScroller();
         if (inner) {
-          warnings.push(`This page scrolls inside <${inner}>, not the document, so the full-page capture only shows the viewport.`);
+          session.scroller = { el: inner, scrollLeft: inner.scrollLeft, scrollTop: inner.scrollTop };
+          const r = inner.getBoundingClientRect();
+          scroller = {
+            label: describe(inner),
+            rect: { x: r.x + inner.clientLeft, y: r.y + inner.clientTop, width: inner.clientWidth, height: inner.clientHeight },
+            scrollWidth: inner.scrollWidth,
+            scrollHeight: inner.scrollHeight,
+          };
+          warnings.push(`This page scrolls inside <${scroller.label}>; the capture shows that scrolling area (everything outside it is omitted).`);
         }
       }
       const info: PrepareInfo = {
@@ -123,11 +147,24 @@ export function createShotDriver(overlay: OverlayControl): PageDriver {
         title: document.title,
         bottomFixedHeight: Math.min(bottomFixedHeight, vh),
         warnings,
+        scroller,
       };
       return info;
     },
 
     async warmUp() {
+      const inner = session?.scroller?.el;
+      if (inner) {
+        // Same pre-scroll pass, on the inner container.
+        const step = Math.max(200, Math.round(inner.clientHeight * 0.8));
+        for (let y = 0, i = 0; y < inner.scrollHeight && i < 80 && y < 40000; y += step, i++) {
+          inner.scrollTo({ left: 0, top: y, behavior: 'instant' as ScrollBehavior });
+          await sleep(90);
+        }
+        inner.scrollTo({ left: 0, top: 0, behavior: 'instant' as ScrollBehavior });
+        await settle();
+        return { width: inner.scrollWidth, height: inner.scrollHeight };
+      }
       // Scroll through the page so lazy images and reveal-on-scroll content load before capture.
       let { height } = docSize();
       const step = Math.max(200, Math.round(innerHeight * 0.8));
@@ -148,18 +185,19 @@ export function createShotDriver(overlay: OverlayControl): PageDriver {
 
     async scroll({ x, y, hide }) {
       document.documentElement.setAttribute('data-ftk-hide', hide);
+      const inner = session?.scroller?.el;
+      if (inner) {
+        inner.scrollTo({ left: x, top: y, behavior: 'instant' as ScrollBehavior });
+        await settle();
+        return { x: inner.scrollLeft, y: inner.scrollTop };
+      }
       window.scrollTo({ left: x, top: y, behavior: 'instant' as ScrollBehavior });
       await settle();
       return { x: scrollX, y: scrollY };
     },
 
     async element(selector): Promise<ElementTarget | null> {
-      let el: Element | null = null;
-      try {
-        el = document.querySelector(selector);
-      } catch {
-        return null;
-      }
+      const el = queryAllSafe(selector, 1)[0];
       if (!el) return null;
       let r = el.getBoundingClientRect();
       const fits = r.width <= innerWidth + 1 && r.height <= innerHeight + 1;

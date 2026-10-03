@@ -6,7 +6,7 @@ import { analyzeColors, analyzePalette, classifyHarmony } from '@ftk/color-analy
 import { parseBreakpoints, classifyToken } from '@ftk/css-analyzer';
 import { analyzeImages, attachImageSizes, evaluateImage, imageFormat } from '@ftk/image-analyzer';
 import { analyzePerformance, rateVital } from '@ftk/performance-analyzer';
-import { analyzeResponsive, deviceModeFor } from '@ftk/responsive-analyzer';
+import { CATEGORY_LABELS, CORE_PRESET_IDS, DEVICE_PRESETS, analyzeResponsive, aspectLabel, describeDevice, deviceModeFor, mediaQueryFor, orientPreset, physicalSize } from '@ftk/responsive-analyzer';
 import { analyzeTypography } from '@ftk/typography-analyzer';
 import { analyzeUx, buttonVariants, summarizeSpacing } from '@ftk/ux-analyzer';
 import { emptyVitals, image, resource, snapshot } from './fixtures';
@@ -324,5 +324,127 @@ describe('colour, typography and UX', () => {
       'ux.no-doctype', 'ux.radius-inconsistency', 'ux.generic-link-text', 'ux.dead-links', 'ux.form-no-submit',
       'ux.autocomplete-missing', 'ux.no-meta-description', 'ux.no-favicon', 'ux.no-design-tokens',
     ]));
+  });
+});
+
+
+describe('device catalogue', () => {
+  const byId = (id: string) => DEVICE_PRESETS.find((p) => p.id === id)!;
+
+  it('covers every screen class from foldables to 60″ TVs', () => {
+    const cats = new Set(DEVICE_PRESETS.map((p) => p.category));
+    expect([...cats].sort()).toEqual(Object.keys(CATEGORY_LABELS).sort());
+    expect(Math.min(...DEVICE_PRESETS.map((p) => p.width))).toBeLessThanOrEqual(280);
+    expect(Math.max(...DEVICE_PRESETS.map((p) => p.width))).toBeGreaterThanOrEqual(5120);
+    expect(byId('uw-49')).toMatchObject({ width: 5120, height: 1440, inches: 49, category: 'ultrawide' });
+    expect(byId('tv-55-4k')).toMatchObject({ width: 1920, height: 1080, dpr: 2, inches: 55, category: 'tv' });
+    expect(byId('tv-60-4k')).toMatchObject({ width: 3840, height: 2160, inches: 60, category: 'tv' });
+  });
+
+  it('has unique ids and labels the e2e suite and users can rely on', () => {
+    expect(new Set(DEVICE_PRESETS.map((p) => p.id)).size).toBe(DEVICE_PRESETS.length);
+    const keys = DEVICE_PRESETS.map((p) => `${p.label}|${p.width}`);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(byId('mobile')).toMatchObject({ label: 'Mobile', width: 390, height: 844, mobile: true });
+    expect(byId('desktop')).toMatchObject({ label: 'Desktop', width: 1440, mobile: false });
+    DEVICE_PRESETS.forEach((p) => expect(p.dpr).toBeGreaterThanOrEqual(1));
+    CORE_PRESET_IDS.forEach((id) => expect(byId(id), id).toBeTruthy());
+  });
+
+  it('includes current phones and tablets with their published viewports', () => {
+    expect(byId('iphone-air')).toMatchObject({ width: 420, height: 912, dpr: 3, brand: 'Apple' });
+    expect(byId('galaxy-s25-ultra')).toMatchObject({ width: 412, height: 891, dpr: 3.5, brand: 'Samsung' });
+    expect(byId('pixel-9-pro')).toMatchObject({ width: 427, height: 952, brand: 'Google' });
+    expect(byId('fold7-open')).toMatchObject({ width: 984, height: 1092 });
+    expect(byId('ipad-pro-11-m4')).toMatchObject({ width: 834, height: 1210, category: 'tablet' });
+    expect(DEVICE_PRESETS.length).toBeGreaterThanOrEqual(70);
+  });
+
+  it('rotates phones and tablets but never desktops or TVs', () => {
+    const phone = orientPreset(byId('iphone-15'), true);
+    expect(phone).toMatchObject({ width: 852, height: 393, label: 'iPhone 15 / 16 (landscape)' });
+    expect(orientPreset(byId('iphone-15'), false)).toBe(byId('iphone-15'));
+    expect(orientPreset(byId('tv-60-4k'), true)).toBe(byId('tv-60-4k'));
+    expect(orientPreset(byId('desktop'), true)).toBe(byId('desktop'));
+  });
+
+  it('classifies viewports by size and aspect ratio', () => {
+    expect(deviceModeFor(390, 844)).toBe('mobile');
+    expect(deviceModeFor(1024, 768)).toBe('tablet');
+    expect(deviceModeFor(1440, 900)).toBe('desktop');
+    expect(deviceModeFor(2560, 1440)).toBe('desktop'); // 16:9 QHD is a normal desktop
+    expect(deviceModeFor(3440, 1440)).toBe('ultrawide'); // 21:9
+    expect(deviceModeFor(5120, 1440)).toBe('ultrawide'); // 32:9
+    expect(deviceModeFor(3840, 2160)).toBe('tv');
+    expect(DEVICE_PRESETS.filter((p) => p.category === 'ultrawide').every((p) => p.mode === 'ultrawide')).toBe(true);
+  });
+
+  it('flags text that stretches across wide screens, with a fix', () => {
+    const base = { meta: { viewportMeta: 'width=device-width' }, overflow: snapshot().overflow };
+    const wide = { selector: 'article p', fontSize: 16, lineHeightRatio: 1.5, charsPerLine: 240, width: 4600 };
+    const f = analyzeResponsive({ ...base, viewport: { width: 5120 }, blocks: [wide] }).find((x) => x.ruleId === 'resp.stretched-content')!;
+    expect(f.severity).toBe('warning');
+    expect(f.title).toContain('5120px');
+    expect(f.fix?.css).toContain('max-width: 75ch');
+    // Normal desktop widths, constrained columns and narrow screens are left alone.
+    expect(analyzeResponsive({ ...base, viewport: { width: 1440 }, blocks: [{ ...wide, width: 1300 }] })).toEqual([]);
+    expect(analyzeResponsive({ ...base, viewport: { width: 5120 }, blocks: [{ ...wide, width: 700, charsPerLine: 80 }] })).toEqual([]);
+    expect(analyzeResponsive({ ...base, viewport: { width: 1920 }, blocks: [{ ...wide, width: 1800, charsPerLine: 150 }] })[0].severity).toBe('info');
+  });
+});
+
+
+describe('device reference', () => {
+  const byId = (id: string) => DEVICE_PRESETS.find((p) => p.id === id)!;
+  const apple = DEVICE_PRESETS.filter((p) => p.brand === 'Apple');
+
+  it('lists Apple phones, tablets, laptops, displays and Apple TV with their published point sizes', () => {
+    expect(apple.length).toBeGreaterThanOrEqual(20);
+    expect(new Set(apple.map((p) => p.category))).toEqual(new Set(['phone', 'tablet', 'laptop', 'desktop', 'tv']));
+    expect(byId('iphone-se')).toMatchObject({ width: 375, height: 667, dpr: 2 });
+    expect(byId('iphone-14')).toMatchObject({ width: 390, height: 844, dpr: 3 });
+    expect(byId('iphone-15')).toMatchObject({ width: 393, height: 852, dpr: 3 });
+    expect(byId('iphone-16-pro')).toMatchObject({ width: 402, height: 874 });
+    expect(byId('iphone-16-pm')).toMatchObject({ width: 440, height: 956 });
+    expect(byId('ipad-mini')).toMatchObject({ width: 744, height: 1133 });
+    expect(byId('ipad-pro-11')).toMatchObject({ width: 834, height: 1194 });
+    expect(byId('ipad-pro-13')).toMatchObject({ width: 1024, height: 1366 });
+    expect(byId('macbook-air-13')).toMatchObject({ width: 1470, height: 956 });
+    expect(byId('macbook-pro-14')).toMatchObject({ width: 1512, height: 982 });
+    expect(byId('macbook-pro-16')).toMatchObject({ width: 1728, height: 1117 });
+    expect(byId('imac-24')).toMatchObject({ width: 2240, height: 1260 });
+    expect(byId('studio-display')).toMatchObject({ width: 2560, height: 1440, dpr: 2 });
+    expect(byId('pro-display')).toMatchObject({ width: 3008, height: 1692, dpr: 2 });
+  });
+
+  it('has 21:9 TVs at 55″ and 60″ plus the common 4K TV sizes', () => {
+    expect(byId('tv-55-uw')).toMatchObject({ inches: 55, category: 'tv', mode: 'ultrawide' });
+    expect(byId('tv-60-uw')).toMatchObject({ inches: 60, category: 'tv', mode: 'ultrawide' });
+    const tvInches = DEVICE_PRESETS.filter((p) => p.category === 'tv').map((p) => p.inches);
+    [43, 50, 55, 60, 65, 75].forEach((n) => expect(tvInches).toContain(n));
+  });
+
+  it('computes physical resolution, aspect ratio and a matching media query', () => {
+    expect(physicalSize(byId('iphone-14'))).toEqual({ width: 1170, height: 2532 });
+    expect(physicalSize(byId('tv-55-4k'))).toEqual({ width: 3840, height: 2160 });
+    expect(physicalSize(byId('studio-display'))).toEqual({ width: 5120, height: 2880 });
+    expect(aspectLabel(1920, 1080)).toBe('16:9');
+    expect(aspectLabel(5120, 1440)).toBe('32:9');
+    expect(aspectLabel(1024, 768)).toBe('4:3');
+    expect(aspectLabel(390, 844)).toBe('2.16:1'); // 195:422 reduces to nothing readable
+    expect(mediaQueryFor(byId('iphone-14'))).toBe('@media (width: 390px) and (height: 844px)');
+    const text = describeDevice(byId('uw-49'));
+    expect(text).toContain('5120 × 1440');
+    expect(text).toContain('32:9');
+    expect(text).toContain('@media (width: 5120px)');
+  });
+
+  it('every preset has a sane size and a label that is unique', () => {
+    DEVICE_PRESETS.forEach((p) => {
+      expect(p.width).toBeGreaterThanOrEqual(200);
+      expect(p.height).toBeGreaterThanOrEqual(200);
+      expect(p.dpr).toBeGreaterThanOrEqual(1);
+    });
+    expect(new Set(DEVICE_PRESETS.map((p) => p.label)).size).toBe(DEVICE_PRESETS.length);
   });
 });

@@ -5,6 +5,7 @@ import { startVitals } from '@ftk/performance-analyzer/collect';
 import { createShotDriver } from '@ftk/screenshot-engine/collect';
 import type { BroadcastEvents, PageRequests, PageType, Result } from '../shared/messages';
 import { errorMessage } from '../shared/messages';
+import { collectAssets } from '@ftk/asset-extractor/collect';
 import { collectSnapshot, viewportInfo } from './collect';
 import { FixStore } from './fixes';
 import { Inspector } from './inspector';
@@ -53,6 +54,7 @@ function main() {
     'page:collect': ({ kinds }) => collectSnapshot(kinds, () => vitals.snapshot()),
     'page:vitals': () => vitals.snapshot(),
     'page:viewport': () => viewportInfo(),
+    'page:assets': () => collectAssets(),
 
     'page:describe': ({ selector, all }) => {
       const el = queryAllSafe(selector, 1)[0];

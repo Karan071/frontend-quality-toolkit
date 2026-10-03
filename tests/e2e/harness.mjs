@@ -38,6 +38,8 @@ export async function launch({ headed = !!process.env.HEADED } = {}) {
       '--window-size=1280,900',
     ],
     defaultViewport: null,
+    // Long waits (56-size device matrix, big ZIPs) legitimately exceed puppeteer's 180s default.
+    protocolTimeout: 900_000,
     ignoreDefaultArgs: ['--disable-extensions'],
   });
   const swTarget = await browser.waitForTarget((t) => t.type() === 'service_worker' && t.url().includes('service-worker.js'), { timeout: 20000 });

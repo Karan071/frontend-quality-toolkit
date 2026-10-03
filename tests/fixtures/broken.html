@@ -4,7 +4,11 @@
 <meta charset="utf-8">
 <title>Fixture — deliberately broken page</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<meta property="og:image" content="/big.png">
+<link rel="stylesheet" href="__CSS_ORIGIN__/external.css">
 <style>
+  @font-face { font-family: Fx; src: url(/fonts/fx.woff2) format('woff2'); }
   :root { --brand: #3b5bdb; --space: 16px; }
   body { margin: 0; font: 16px/1.5 system-ui, sans-serif; background: #fff; color: #222; }
   #hdr { position: fixed; top: 0; left: 0; right: 0; height: 56px; background: #ff00ff; z-index: 10; }
@@ -27,6 +31,11 @@
   <p class="faint">This text has poor contrast against the white background.</p>
   <img src="/big.png" width="300" style="display:block;margin:16px">
   <div class="card" id="card">Card</div>
+  <svg aria-label="Search icon" width="24" height="24" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="#333" stroke-width="2"/></svg>
+  <img alt="dot" width="20" height="20" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==">
+  <img alt="lazy" width="20" height="20" data-src="/lazy.png">
+  <picture><source srcset="/lazy2.png 2x, /lazy3.png 3x"><img alt="pic" width="20" height="20" src="/lazy.png"></picture>
+  <p><a href="/files/report.pdf">Annual report (PDF)</a></p>
   <form>
     <input type="text" placeholder="Email">
     <button type="button"><svg width="10" height="10"></svg></button>
@@ -37,7 +46,17 @@
   <div class="block" id="b3" style="background:#1971c2">3</div>
   <div class="block" id="b4" style="background:#f08c00">4</div>
   <div class="block" id="b5" style="background:#6741d9">5</div>
+  <x-widget id="widget"></x-widget>
 </main>
+<script>
+  // Web component with an open shadow root: its content must be audited and selectable too.
+  customElements.define('x-widget', class extends HTMLElement {
+    connectedCallback() {
+      this.attachShadow({ mode: 'open' }).innerHTML =
+        '<div class="inner" style="padding:12px"><p class="sh" style="color:#bbbbbb;margin:0">Shadow DOM low contrast text</p><button type="button" class="shbtn"><svg width="10" height="10"></svg></button></div>';
+    }
+  });
+</script>
 <div id="ftr"></div>
 </body>
 </html>

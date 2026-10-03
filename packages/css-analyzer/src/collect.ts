@@ -1,6 +1,7 @@
 import type { CssData, DesignToken, StylesheetSample } from '@ftk/audit-core';
 import type { MatchedRule } from '@ftk/dom-analyzer';
 import { classifyToken, parseBreakpoints, sourceLabel } from './index';
+import { cssUrls } from '@ftk/asset-extractor';
 
 interface RuleVisit {
   rule: CSSRule;
@@ -162,4 +163,23 @@ export function collectFocusOutlineRemovals(): { selector: string; source: strin
     }
   }
   return hits;
+}
+
+
+/** Font files declared by @font-face rules in every readable stylesheet. */
+export function collectFontFaces(): { url: string; family: string }[] {
+  const out: { url: string; family: string }[] = [];
+  for (const sheet of Array.from(document.styleSheets)) {
+    for (const { rule } of walkRules(sheet)) {
+      if (!(rule instanceof CSSFontFaceRule)) continue;
+      const base = rule.parentStyleSheet?.href ?? document.baseURI;
+      const family = rule.style.getPropertyValue('font-family').replace(/^["']|["']$/g, '').trim();
+      for (const u of cssUrls(rule.style.getPropertyValue('src'))) {
+        try {
+          out.push({ url: new URL(u, base).href, family });
+        } catch { /* unresolvable */ }
+      }
+    }
+  }
+  return out;
 }

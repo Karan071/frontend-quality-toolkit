@@ -13,7 +13,7 @@ const SITES = process.argv.slice(2).length
       'https://www.bbc.com/news',
     ];
 
-const SITE_BUDGET_MS = Number(process.env.SITE_BUDGET_MS || 300_000);
+const SITE_BUDGET_MS = Number(process.env.SITE_BUDGET_MS || 420_000);
 const { browser, executablePath, extId, sw } = await launch();
 console.log(`browser: ${executablePath.split('/').slice(-1)[0]} · extension ${extId}\n`);
 
@@ -111,11 +111,30 @@ for (const url of SITES) {
 
     // ── responsive lab ──
     await click('[role=tab]', 'Responsive');
+    const presetCount = Number(await panel.evaluate(() => [...document.querySelectorAll('button')].find((b) => /^Test all \d+/.test(b.textContent.trim()))?.textContent.match(/\d+/)?.[0] ?? 0));
     await click('button', 'Test all');
-    await panel.waitForFunction(() => document.querySelectorAll('.card .list-item .badge.ok, .card .list-item .badge.error').length >= 5, { timeout: 90000 });
+    // Wait for the whole matrix (not just the first rows): screenshots must not run mid-emulation.
+    await panel.waitForFunction((n) => !document.querySelector('[aria-busy="true"]') && document.querySelectorAll('.card .list-item .badge.ok, .card .list-item .badge.error').length >= n, { timeout: 400000 }, presetCount);
     const resp = await panel.$$eval('.card .list-item', (els) => els.map((e) => e.textContent.replace(/\s+/g, ' ')));
-    ok('responsive matrix ran at all 5 sizes', resp.length >= 5, resp.map((r) => r.replace(/overflow.*/, 'overflow')).join(' | ').slice(0, 200));
+    ok(`responsive matrix ran at all ${presetCount} sizes`, resp.length >= presetCount, resp.map((r) => r.replace(/overflow.*/, 'overflow')).join(' | ').slice(0, 200));
     ok('emulation cleaned up', (await page.evaluate(() => document.documentElement.clientWidth)) === docBefore.w);
+
+    // ── assets ──
+    await panel.evaluate(() => { window.__dl = []; const orig = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () { if (this.download) { window.__dl.push({ name: this.download, href: this.href }); return; } return orig.call(this); }; });
+    await click('[role=tab]', 'Assets');
+    await click('button', 'Scan assets');
+    await panel.waitForFunction(() => document.querySelectorAll('.asset').length > 0 || document.querySelector('.empty'), { timeout: 60000 });
+    const assetCount = await panel.evaluate(() => Number(document.querySelector('.chips .chip-btn')?.textContent.match(/\d+/)?.[0] ?? 0));
+    ok('assets scanned', assetCount > 0, `${assetCount} assets: ${await panel.$$eval('.chips .chip-btn', (els) => els.slice(1).map((e) => e.textContent.trim()).join(', '))}`);
+    if (assetCount > 0) {
+      await sleep(1500);
+      const boxes = await panel.$$('.asset input[type=checkbox]');
+      for (const b of boxes.slice(0, 4)) await b.click();
+      await click('button', 'Download selected');
+      await panel.waitForFunction(() => window.__dl.some((d) => /\.zip$/.test(d.name)), { timeout: 120000 }).catch(() => undefined);
+      const zip = await panel.evaluate(async () => { const d = window.__dl.find((x) => /\.zip$/.test(x.name)); if (!d) return null; const b = new Uint8Array(await (await fetch(d.href)).arrayBuffer()); return { name: d.name, size: b.length, magic: [b[0], b[1]] }; });
+      ok('ZIP of selected assets downloads', !!zip && zip.magic[0] === 0x50 && zip.magic[1] === 0x4b && zip.size > 100, zip ? `${zip.name} ${zip.size} B` : 'none');
+    }
 
     // ── screenshots ──
     const capture = async (label, text, timeout = 150000) => {

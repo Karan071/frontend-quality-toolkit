@@ -1,4 +1,7 @@
 import { useSyncExternalStore } from 'react';
+import type { IconName } from './components/ui';
+import type { AssetSample } from '@ftk/asset-extractor';
+import type { ZipProgress } from '@ftk/asset-extractor/zip';
 import type { VitalsSnapshot } from '@ftk/audit-core';
 import type { ElementInfo, MatchedRule } from '@ftk/dom-analyzer';
 import type { ViewportTestResult } from '@ftk/responsive-analyzer';
@@ -15,18 +18,20 @@ export type RouteId =
   | 'bundles'
   | 'accessibility'
   | 'uxui'
+  | 'assets'
   | 'screenshots';
 
-export const ROUTES: { id: RouteId; label: string }[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'inspect', label: 'Inspect' },
-  { id: 'responsive', label: 'Responsive' },
-  { id: 'performance', label: 'Performance' },
-  { id: 'images', label: 'Images' },
-  { id: 'bundles', label: 'Bundles' },
-  { id: 'accessibility', label: 'Accessibility' },
-  { id: 'uxui', label: 'UI / UX' },
-  { id: 'screenshots', label: 'Screenshots' },
+export const ROUTES: { id: RouteId; label: string; icon: IconName }[] = [
+  { id: 'overview', label: 'Overview', icon: 'home' },
+  { id: 'inspect', label: 'Inspect', icon: 'pick' },
+  { id: 'responsive', label: 'Responsive', icon: 'phone' },
+  { id: 'performance', label: 'Performance', icon: 'gauge' },
+  { id: 'images', label: 'Images', icon: 'image' },
+  { id: 'bundles', label: 'Bundles', icon: 'package' },
+  { id: 'accessibility', label: 'Accessibility', icon: 'person' },
+  { id: 'uxui', label: 'UI / UX', icon: 'layers' },
+  { id: 'assets', label: 'Assets', icon: 'archive' },
+  { id: 'screenshots', label: 'Screenshots', icon: 'camera' },
 ];
 
 export interface TabInfo {
@@ -60,6 +65,14 @@ export interface AppliedFix {
   css: string;
   /** Finding id this fix was created from, or null for hand-written CSS. */
   findingId: string | null;
+}
+
+export interface AssetScan {
+  tabId: number;
+  url: string;
+  scannedAt: number;
+  items: AssetSample[];
+  truncated: boolean;
 }
 
 export interface Toast {
@@ -97,6 +110,11 @@ export interface AppState {
   emulation: EmulationView;
   viewportTests: ViewportTestResult[];
   testing: string | null;
+  testProgress: { done: number; total: number } | null;
+
+  assets: AssetScan | null;
+  assetsScanning: boolean;
+  assetProgress: (ZipProgress & { label: string }) | null;
 
   screenshots: ScreenshotRecord[];
   lastShotId: string | null;
@@ -124,6 +142,10 @@ export const initialState: AppState = {
   emulation: { active: false },
   viewportTests: [],
   testing: null,
+  testProgress: null,
+  assets: null,
+  assetsScanning: false,
+  assetProgress: null,
   screenshots: [],
   lastShotId: null,
   shotBusy: null,

@@ -1,12 +1,12 @@
 import type { OverflowCulprit, OverflowData, Visitor } from '@ftk/audit-core';
-import { isToolkitNode, uniqueSelector } from '@ftk/dom-analyzer/collect';
+import { elementsIn, isToolkitNode, parentOf, uniqueSelector } from '@ftk/dom-analyzer/collect';
 import { anchorOf } from './index';
 import type { PositionedElement } from './index';
 
 const MAX_CULPRITS = 25;
 
 function clippedByAncestor(el: Element, clientWidth: number): boolean {
-  for (let p = el.parentElement; p && p !== document.documentElement; p = p.parentElement) {
+  for (let p = parentOf(el); p && p !== document.documentElement; p = parentOf(p)) {
     const s = getComputedStyle(p);
     if (s.position === 'fixed') return true;
     if (s.overflowX !== 'visible') {
@@ -33,7 +33,7 @@ export function overflowVisitor(): Visitor<OverflowData> {
     visit(ctx) {
       if (!hasHorizontalScroll) return;
       const { el } = ctx;
-      const parent = el.parentElement;
+      const parent = parentOf(el);
       if (parent && covered.has(parent)) {
         covered.add(el);
         return;
@@ -69,7 +69,7 @@ export function overflowVisitor(): Visitor<OverflowData> {
 export function findPositioned(): PositionedElement[] {
   const out: PositionedElement[] = [];
   const vh = window.innerHeight;
-  for (const el of Array.from(document.body?.querySelectorAll('*') ?? [])) {
+  for (const el of document.body ? elementsIn(document.body) : []) {
     if (isToolkitNode(el)) continue;
     const pos = getComputedStyle(el).position;
     if (pos !== 'fixed' && pos !== 'sticky') continue;

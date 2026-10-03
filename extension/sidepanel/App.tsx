@@ -4,8 +4,9 @@ import { CATEGORIES } from '@ftk/audit-core';
 import type { Category } from '@ftk/audit-core';
 import { cycleTheme, init, navigate } from './actions';
 import { ScreenshotBar } from './components/ScreenshotBar';
-import { Banner, Button, Spinner } from './components/ui';
+import { Banner, Button, Icon, Spinner } from './components/ui';
 import { Accessibility } from './routes/Accessibility';
+import { Assets } from './routes/Assets';
 import { Bundles } from './routes/Bundles';
 import { Images } from './routes/Images';
 import { Inspect } from './routes/Inspect';
@@ -26,6 +27,7 @@ const VIEWS: Record<RouteId, ComponentType> = {
   bundles: Bundles,
   accessibility: Accessibility,
   uxui: UiUx,
+  assets: Assets,
   screenshots: Screenshots,
 };
 
@@ -46,15 +48,26 @@ function hostOf(url: string): string {
   }
 }
 
+/** Same mark as the extension icon (extension/icons/icon-small.svg). */
 function Logo() {
   return (
-    <svg className="logo" viewBox="0 0 24 24" aria-hidden="true">
-      <rect width="24" height="24" rx="7" fill="var(--primary)" />
-      <path d="M6.5 9V6.5H9M15 6.5h2.5V9M17.5 15v2.5H15M9 17.5H6.5V15" stroke="var(--primary-foreground)" strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="12" cy="12" r="1.9" fill="var(--primary-foreground)" />
+    <svg className="logo" viewBox="0 0 128 128" aria-hidden="true">
+      <defs>
+        <linearGradient id="ftk-logo" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#6d6bf6" />
+          <stop offset="1" stopColor="#3730a3" />
+        </linearGradient>
+      </defs>
+      <rect width="128" height="128" rx="28" fill="url(#ftk-logo)" />
+      <rect x="14" y="22" width="78" height="68" rx="12" fill="none" stroke="#fff" strokeWidth="12" />
+      <path d="M14 46h78" stroke="#fff" strokeWidth="11" />
+      <circle cx="82" cy="80" r="24" fill="#3a33b0" stroke="#fff" strokeWidth="13" />
+      <path d="M100 98l17 17" stroke="#fff" strokeWidth="16" strokeLinecap="round" />
     </svg>
   );
 }
+
+const inTabMode = new URLSearchParams(location.search).has('tab');
 
 const THEME_ICON = { system: 'monitor', light: 'sun', dark: 'moon' } as const;
 
@@ -108,6 +121,16 @@ export function App() {
           </div>
         </div>
         {(app.tab.status === 'loading' || !app.ready) && <Spinner label="Loading" />}
+        {!inTabMode && app.tab.id != null && app.tab.status !== 'restricted' && (
+          <Button
+            variant="ghost"
+            small
+            icon="open"
+            aria-label="Open the toolkit in a full browser tab"
+            title="Open in a tab (roomier layout for large screens)"
+            onClick={() => chrome.tabs.create({ url: chrome.runtime.getURL(`sidepanel.html?tab=${app.tab.id}`) })}
+          />
+        )}
         <Button
           variant="ghost"
           small
@@ -134,7 +157,8 @@ export function App() {
               className="tab"
               onClick={() => navigate(r.id)}
             >
-              {r.label}
+              <Icon name={r.icon} className="tab-icon" />
+              <span className="tab-label">{r.label}</span>
               {count && <span className={`tab-count ${count.tone}`} aria-label={`${count.n} findings`}>{count.n}</span>}
             </button>
           );

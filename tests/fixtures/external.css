@@ -1,0 +1,5 @@
+/* Served from a different origin without CORS headers, so the page cannot read it through the CSSOM. */
+:root { --ext-brand: #0b7285; --ext-space: 12px; }
+@media (min-width: 1000px) { .never { color: red; } }
+@media (max-width: 480px) { .never { color: blue; } }
+button.ext:focus { outline: none; }

@@ -66,7 +66,8 @@ async function restoreEmulation() {
     /* ignore */
   }
 }
-const ready = restoreEmulation();
+// Every handler awaits this; a slow storage read must never block them indefinitely.
+const ready = Promise.race([restoreEmulation(), new Promise<void>((r) => setTimeout(r, 2000))]);
 
 async function ensureAttached(tabId: number) {
   if (attached.has(tabId)) return;
@@ -82,18 +83,18 @@ async function ensureAttached(tabId: number) {
 const cdp = <T = unknown>(tabId: number, method: string, params?: object) =>
   withTimeout(chrome.debugger.sendCommand({ tabId }, method, params) as Promise<T>, 20_000, method);
 
-async function setEmulation(tabId: number, width: number, height: number, mobile: boolean): Promise<EmulationState> {
+async function setEmulation(tabId: number, width: number, height: number, mobile: boolean, dpr = 0): Promise<EmulationState> {
   await ensureAttached(tabId);
   await cdp(tabId, 'Emulation.setDeviceMetricsOverride', {
     width,
     height,
-    deviceScaleFactor: 0, // keep the real device scale factor
+    deviceScaleFactor: dpr, // 0 keeps the real device scale factor
     mobile,
     screenWidth: width,
     screenHeight: height,
   });
   await cdp(tabId, 'Emulation.setTouchEmulationEnabled', { enabled: mobile, maxTouchPoints: mobile ? 5 : 1 });
-  const state: EmulationState = { active: true, width, height, mobile };
+  const state: EmulationState = { active: true, width, height, mobile, dpr };
   emulation.set(tabId, state);
   await persistEmulation();
   return state;
@@ -167,6 +168,24 @@ async function probe(urls: string[]): Promise<Record<string, ProbeInfo>> {
   return out;
 }
 
+/** Fetches stylesheet text the page itself cannot read (cross-origin, no CORS). Capped and credential-free. */
+async function fetchCss(urls: string[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  const list = [...new Set(urls.filter((u) => /^https?:/.test(u)))].slice(0, 15);
+  await Promise.all(
+    list.map(async (url) => {
+      try {
+        const res = await fetch(url, { credentials: 'omit', signal: AbortSignal.timeout(8000) });
+        if (!res.ok) return;
+        out[url] = (await res.text()).slice(0, 800_000);
+      } catch {
+        /* unreachable or timed out: the sheet simply stays unreadable */
+      }
+    }),
+  );
+  return out;
+}
+
 // ───────────────────────────── screenshots ─────────────────────────────
 
 // chrome.tabs.captureVisibleTab is limited to ~2 calls per second.
@@ -187,7 +206,7 @@ async function grabViaDebugger(tabId: number): Promise<ImageBitmap> {
   return createImageBitmap(new Blob([bytes], { type: 'image/png' }));
 }
 
-async function captureShot(req: BackgroundRequests['bg:capture']['req']): Promise<{ id: string }> {
+async function captureShot(req: BackgroundRequests['bg:capture']['req']): Promise<{ id: string; ids: string[] }> {
   await ready;
   const { tabId } = req;
   const tab = await chrome.tabs.get(tabId);
@@ -210,14 +229,20 @@ async function captureShot(req: BackgroundRequests['bg:capture']['req']): Promis
   };
 
   try {
-    const out = await capture(req, {
+    const outputs = await capture(req, {
       driver,
       grab: () => (useDebugger ? grabViaDebugger(tabId) : grabVisible(tab.windowId)),
       progress: (done, total) => broadcast('evt:shot-progress', { tabId, done, total }),
     });
-    const id = crypto.randomUUID();
-    await saveScreenshot({ ...out, id, createdAt: Date.now() });
-    return { id };
+    const ids: string[] = [];
+    const now = Date.now();
+    for (const [i, out] of outputs.entries()) {
+      const id = crypto.randomUUID();
+      ids.push(id);
+      // Parts of one capture stay together and keep their order (newest-first listing).
+      await saveScreenshot({ ...out, id, createdAt: now + (outputs.length - i) });
+    }
+    return { id: ids[0], ids };
   } finally {
     if (temporary) {
       attached.delete(tabId);
@@ -232,9 +257,10 @@ type BgHandlers = { [K in BackgroundType]: (req: BackgroundRequests[K]['req']) =
 
 const handlers: BgHandlers = {
   'bg:probe': ({ urls }) => probe(urls),
-  'bg:emulate': async ({ tabId, width, height, mobile }) => {
+  'bg:fetch-css': ({ urls }) => fetchCss(urls),
+  'bg:emulate': async ({ tabId, width, height, mobile, dpr }) => {
     await ready;
-    const state = await setEmulation(tabId, width, height, mobile);
+    const state = await setEmulation(tabId, width, height, mobile, dpr);
     broadcast('evt:emulation', { tabId, state });
     return state;
   },

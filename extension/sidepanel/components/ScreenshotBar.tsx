@@ -28,6 +28,27 @@ export function ShotActions({ shot, small = true }: { shot: ScreenshotRecord; sm
   );
 }
 
+const AUTHOR = { name: 'Karan Chourasia', handle: 'Karan071', url: 'https://github.com/Karan071' };
+
+/** Quiet attribution: who built this, where to find the source, which version is running. */
+function Credit() {
+  const version = chrome.runtime.getManifest().version;
+  return (
+    <div className="credit">
+      <span>
+        Built by <strong>{AUTHOR.name}</strong>
+      </span>
+      <span aria-hidden="true">·</span>
+      <a href={AUTHOR.url} target="_blank" rel="noopener noreferrer" aria-label={`${AUTHOR.name} on GitHub (opens in a new tab)`}>
+        <Icon name="github" />
+        {AUTHOR.handle}
+      </a>
+      <span aria-hidden="true">·</span>
+      <span>v{version}</span>
+    </div>
+  );
+}
+
 /** Global capture controls — available from every screen (§29 of the PRD). */
 export function ScreenshotBar() {
   const app = useApp();
@@ -81,7 +102,7 @@ export function ScreenshotBar() {
       )}
       {label && <div className="small muted">{label}</div>}
       {last && !shotBusy && (
-        <div className="row wrap between">
+        <div className="row wrap between" role="status">
           <span className="small">
             <Icon name="check" /> Screenshot captured · {last.width} × {last.height}
           </span>
@@ -93,6 +114,7 @@ export function ScreenshotBar() {
           </span>
         </div>
       )}
+      <Credit />
     </div>
   );
 }
