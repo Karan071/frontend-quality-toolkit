@@ -30,6 +30,51 @@ importers:
       '@fontsource-variable/inter':
         specifier: ^5.3.0
         version: 5.3.0
+      '@ftk/accessibility-analyzer':
+        specifier: workspace:*
+        version: link:packages/accessibility-analyzer
+      '@ftk/asset-extractor':
+        specifier: workspace:*
+        version: link:packages/asset-extractor
+      '@ftk/audit-core':
+        specifier: workspace:*
+        version: link:packages/audit-core
+      '@ftk/bundle-analyzer':
+        specifier: workspace:*
+        version: link:packages/bundle-analyzer
+      '@ftk/color-analyzer':
+        specifier: workspace:*
+        version: link:packages/color-analyzer
+      '@ftk/css-analyzer':
+        specifier: workspace:*
+        version: link:packages/css-analyzer
+      '@ftk/dom-analyzer':
+        specifier: workspace:*
+        version: link:packages/dom-analyzer
+      '@ftk/image-analyzer':
+        specifier: workspace:*
+        version: link:packages/image-analyzer
+      '@ftk/layout-analyzer':
+        specifier: workspace:*
+        version: link:packages/layout-analyzer
+      '@ftk/performance-analyzer':
+        specifier: workspace:*
+        version: link:packages/performance-analyzer
+      '@ftk/recommendation-engine':
+        specifier: workspace:*
+        version: link:packages/recommendation-engine
+      '@ftk/responsive-analyzer':
+        specifier: workspace:*
+        version: link:packages/responsive-analyzer
+      '@ftk/screenshot-engine':
+        specifier: workspace:*
+        version: link:packages/screenshot-engine
+      '@ftk/typography-analyzer':
+        specifier: workspace:*
+        version: link:packages/typography-analyzer
+      '@ftk/ux-analyzer':
+        specifier: workspace:*
+        version: link:packages/ux-analyzer
       '@types/chrome':
         specifier: ^0.0.300
         version: 0.0.300
@@ -66,6 +111,36 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@26.6.4)(jsdom@26.1.0)
+
+  packages/accessibility-analyzer: {}
+
+  packages/asset-extractor: {}
+
+  packages/audit-core: {}
+
+  packages/bundle-analyzer: {}
+
+  packages/color-analyzer: {}
+
+  packages/css-analyzer: {}
+
+  packages/dom-analyzer: {}
+
+  packages/image-analyzer: {}
+
+  packages/layout-analyzer: {}
+
+  packages/performance-analyzer: {}
+
+  packages/recommendation-engine: {}
+
+  packages/responsive-analyzer: {}
+
+  packages/screenshot-engine: {}
+
+  packages/typography-analyzer: {}
+
+  packages/ux-analyzer: {}
 
 packages:
 
