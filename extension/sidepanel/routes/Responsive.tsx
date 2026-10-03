@@ -4,7 +4,7 @@ import { CATEGORY_LABELS, DEVICE_PRESETS, aspectLabel, describeDevice, orientPre
 import type { DeviceCategory, DevicePreset } from '@ftk/responsive-analyzer';
 import { applyEmulation, openSimulator, resetEmulation, takeScreenshot, testAllViewports, testCoreViewports, testPresets, testViewport, toast } from '../actions';
 import { FindingList } from '../components/FindingList';
-import { Badge, Banner, Button, Card, Icon, Segmented } from '../components/ui';
+import { Badge, Banner, Button, Card, Icon } from '../components/ui';
 import { useAuditView } from '../components/hooks';
 
 type Target = { label: string; width: number; height: number; mobile: boolean; dpr?: number };

@@ -75,7 +75,7 @@ async function ensureAttached(tabId: number) {
     await withTimeout(chrome.debugger.attach({ tabId }, '1.3'), 15_000, 'debugger.attach');
   } catch (e) {
     // Already attached by us in a previous worker lifetime.
-    if (!/already attached/i.test(errorMessage(e))) throw new Error(`Cannot attach debugger: ${errorMessage(e)}`);
+    if (!/already attached/i.test(errorMessage(e))) throw new Error(`Cannot attach debugger: ${errorMessage(e)}`, { cause: e });
   }
   attached.add(tabId);
 }

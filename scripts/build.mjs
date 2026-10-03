@@ -50,6 +50,7 @@ if (watch) {
   // Guard: Chrome silently refuses to load scripts it considers non-UTF-8 (e.g. noncharacters).
   for (const f of ['content.js', 'service-worker.js', 'sidepanel.js', 'viewer.js', 'simulator.js']) {
     const text = readFileSync(`${out}/${f}`, 'utf8');
+    // eslint-disable-next-line no-control-regex -- intentional: scan for any non-ASCII char
     const bad = /[^\x00-\x7f]/.exec(text);
     if (bad) throw new Error(`${f} contains non-ASCII character U+${bad[0].codePointAt(0).toString(16)} near: ${text.slice(Math.max(0, bad.index - 40), bad.index + 10)}`);
   }

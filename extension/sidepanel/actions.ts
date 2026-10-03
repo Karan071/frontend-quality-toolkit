@@ -154,7 +154,7 @@ export async function setTarget(tab: chrome.tabs.Tab) {
     setState({ tab: { id, url, title: tab.title ?? '', status: 'restricted' }, selection: null, picking: false, fixes: {} });
     return;
   }
-  setState((s) => ({
+  setState(() => ({
     tab: { id, url, title: tab.title ?? '', status: 'loading' },
     ...(switching ? { selection: null, picking: false, fixes: {}, highlightedId: null, vitals: null, viewportTests: [], emulation: { active: false }, assets: null } : {}),
     auditError: null,

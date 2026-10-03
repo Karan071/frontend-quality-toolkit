@@ -72,7 +72,7 @@ export function Assets() {
   const [shown, setShown] = useState(PAGE_SIZE);
   const ready = tab.status === 'ready';
 
-  const items = assets?.items ?? [];
+  const items = useMemo(() => assets?.items ?? [], [assets]);
   const counts = useMemo(() => countByType(items), [items]);
   const q = query.trim().toLowerCase();
   const visible = useMemo(

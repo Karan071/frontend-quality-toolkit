@@ -32,7 +32,6 @@ for (const url of SITES) {
   try {
     await Promise.race([watchdog, (async () => {
     page = await browser.newPage();
-    const pageErrors = [];
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.bringToFront();
     await sleep(4000); // let the page settle: hydration, lazy images, ads

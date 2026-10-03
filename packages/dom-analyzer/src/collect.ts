@@ -2,7 +2,7 @@ import { composite, contrastRatio, cssEscape, parseColor, toHex } from '@ftk/aud
 import type { RGBA } from '@ftk/audit-core';
 import type { PageMeta, Visitor, WalkContext } from '@ftk/audit-core';
 import { STYLE_GROUPS, elementLabel } from './index';
-import type { ElementInfo, Sides, StyleEntry } from './index';
+import type { ElementInfo, Sides } from './index';
 
 /** Elements injected by the toolkit itself; never analysed or captured. */
 export const TOOLKIT_ID_PREFIX = '__ftk';

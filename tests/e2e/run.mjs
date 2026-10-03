@@ -2,7 +2,7 @@
 // side panel (opened as a tab bound to the fixture tab), and verifies behaviour.
 import http from 'node:http';
 import { deflateSync } from 'node:zlib';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import puppeteer from 'puppeteer-core';
@@ -143,7 +143,6 @@ try {
   await shot('04-uiux');
   await findingsOf('Images');
   await shot('05-images');
-  const perf = await findingsOf('Performance');
   await shot('06-performance');
   check('performance tab renders vitals', (await panel.$$('.metric')).length >= 6);
 
@@ -332,7 +331,7 @@ try {
     }, tallParts.map((r) => r.id));
     const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
     // Parts are stored newest-first; part 1 starts at the top of the page.
-    const ordered = [...tallParts.keys()].sort((a, b) => /part1of2/.test(tallParts[a].name) ? -1 : 1);
+    const ordered = [...tallParts.keys()].sort((a) => /part1of2/.test(tallParts[a].name) ? -1 : 1);
     let ok = true; let offset = 0; const bad = [];
     for (const idx of ordered) {
       for (const [y, color] of parts[idx]) {
@@ -358,7 +357,6 @@ try {
   await sleep(200);
   await clickText('.finding-actions button', 'Try fix');
   await sleep(2500);
-  const after = await panel.$$eval('.finding-title', (els) => els.map((e) => e.textContent));
   const stillFaint = await panel.$$eval('.finding', (els) => els.some((e) => /#aaaaaa/.test(e.textContent)));
   check('applying a fix re-audits and the faint text no longer fails contrast', !stillFaint, 'remaining contrast finding is only the orange card from the Try-CSS step');
   const color = await page.$eval('.faint', (e) => getComputedStyle(e).color);

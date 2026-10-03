@@ -33,19 +33,19 @@ export function collectSnapshot(kinds: CollectKind[], vitals: () => VitalsSnapsh
   const visitors: Visitor<unknown>[] = [];
   const finish: (() => void)[] = [];
 
-  const use = <T,>(v: Visitor<T>, assign: (value: T) => void) => {
+  const register = <T,>(v: Visitor<T>, assign: (value: T) => void) => {
     visitors.push(v as Visitor<unknown>);
     finish.push(() => assign(v.result()));
   };
 
-  if (want.has('images')) use(imagesVisitor(), (v) => (out.images = v));
-  if (want.has('overflow')) use(overflowVisitor(), (v) => (out.overflow = v));
-  if (want.has('a11y')) use(a11yVisitor(), (v) => (out.a11y = v));
+  if (want.has('images')) register(imagesVisitor(), (v) => (out.images = v));
+  if (want.has('overflow')) register(overflowVisitor(), (v) => (out.overflow = v));
+  if (want.has('a11y')) register(a11yVisitor(), (v) => (out.a11y = v));
   if (want.has('styles')) {
-    use(colorsVisitor(), (v) => (out.colors = v));
-    use(typographyVisitor(), (v) => (out.typography = v));
-    use(spacingVisitor(), (v) => (out.spacing = v));
-    use(uxVisitor(), (v) => (out.ux = v));
+    register(colorsVisitor(), (v) => (out.colors = v));
+    register(typographyVisitor(), (v) => (out.typography = v));
+    register(spacingVisitor(), (v) => (out.spacing = v));
+    register(uxVisitor(), (v) => (out.ux = v));
   }
 
   if (visitors.length) {
