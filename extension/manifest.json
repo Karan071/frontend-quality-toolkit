@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Frontend Quality Toolkit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Inspect, measure and audit any page from the side panel: layout, responsive behaviour, Web Vitals, images, bundles, accessibility, UI consistency — with temporary fixes and screenshots.",
   "minimum_chrome_version": "116",
   "action": {

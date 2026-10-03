@@ -7,7 +7,7 @@ A Chrome (Manifest V3) side-panel extension that lets a frontend developer **ins
 | | |
 | --- | --- |
 | **Inspect** | Element picker with box-model overlay, computed styles, matched CSS rules, accessibility name/role/contrast, temporary CSS |
-| **Responsive** | A 73-device reference in a two-column grid, with real pixel ratios — **Apple** (iPhone SE→17 Pro Max and iPhone Air, iPad mini→Pro 13″, MacBook Air/Pro, iMac, Studio Display, Pro Display XDR, Apple TV), Samsung (S25/S26, Z Flip/Fold 7), Pixel 9, OnePlus, Surface, laptops, 24–32″ monitors, **29″–49″ ultrawide** and **43–75″ TVs incl. 21:9 55″/60″** — each showing CSS size, physical resolution, aspect ratio and diagonal, with search, an Apple filter, a landscape toggle and copy-as-media-query; custom sizes up to 10 000 px; overflow detection with culprit elements, wide-screen readability check, breakpoint discovery, per-size screenshots, and a **full-screen device simulator** that centres the page in a device frame, rotates it and zooms out to fit (or Ctrl+scroll to zoom) so a 49″ monitor or 60″ TV is visible whole |
+| **Responsive** | A 73-device reference in a two-column grid, with real pixel ratios — **Apple** (iPhone SE→17 Pro Max and iPhone Air, iPad mini→Pro 13″, MacBook Air/Pro, iMac, Studio Display, Pro Display XDR, Apple TV), Samsung (S25/S26, Z Flip/Fold 7), Pixel 9, OnePlus, Surface, laptops, 24–32″ monitors, **29″–49″ ultrawide** and **43–75″ TVs incl. 21:9 55″/60″** — each showing CSS size, physical resolution, aspect ratio and diagonal, with search, an Apple filter, a landscape toggle and copy-as-media-query; custom sizes up to 10 000 px; overflow detection with culprit elements, wide-screen readability check, breakpoint discovery, per-size screenshots, and a **full-screen device simulator** that shows the page inside a realistic hardware frame (see below), rotates it and zooms out to fit (or Ctrl+scroll to zoom) so a 49″ monitor or 60″ TV is visible whole |
 | **Performance** | LCP · CLS · INP · FCP · TTFB · TBT, long tasks, layout-shift culprits, "Reload & measure" |
 | **Images** | Oversized / heavy / legacy-format / un-dimensioned / lazy-loading problems, CLS cross-referencing, file sizes even for cross-origin images |
 | **Bundles** | JS & CSS weight, third-party analysis, render-blocking resources, uncompressed text, duplicates |
@@ -78,6 +78,7 @@ extension/
   service-worker.ts      emulation (CDP), size probing, screenshot orchestration
   content/               page-side: inspector, overlay (shadow DOM), temp fixes, collectors, vitals
   sidepanel/             React UI (shadcn-style tokens, Inter + Geist)
+  simulator/             full-window device simulator; DeviceFrame.tsx draws the per-device hardware
   shared/                typed messages, IndexedDB store, audit pipeline
 packages/                one workspace package per concern
   audit-core  dom-analyzer  css-analyzer  layout-analyzer  responsive-analyzer
@@ -103,6 +104,20 @@ npm run e2e:prod   # same workflow against live production sites (needs network)
 
 The e2e scripts look for Chrome, Chromium or Brave (`CHROME_PATH` overrides). They pass `--disable-features=DisableLoadExtensionCommandLineSwitch`, which Chrome 137+ needs to honour `--load-extension`.
 
+### Device simulator and frames
+
+**Open simulator** (Responsive tab) opens a full-window preview of the page at any preset's exact CSS size, drawn inside a hardware frame. The frame toggle in the toolbar switches back to the bare viewport (the choice is remembered).
+
+| Device | Frame |
+| --- | --- |
+| Phones | Metal rim (steel-blue on Apple, graphite elsewhere), side buttons, and the right camera style per model: Dynamic Island (iPhone 14 Pro and later, Air), notch (iPhone X to 14, 17e), punch-hole (Android) or a home button (iPhone SE). A status bar (live clock, signal, Wi-Fi, battery) sits above the page and a browser address strip with the site's host and a home indicator sits below it |
+| Tablets | Thin bezel, front camera, side buttons, status bar and home indicator; the iPad 10.2″ keeps its home button |
+| Laptops | Lid with camera and a wider base with a trackpad lip |
+| Desktops, ultrawide | Slim bezel and a stand; the iMac also gets its chin |
+| TVs | Near-bezel-less panel on two feet |
+
+Rotating a phone or tablet moves the camera cutout to the side and the buttons to the other edges. The status bar and address strip are drawn *outside* the page, so the page still sees exactly the preset's width and height. Each preset can set a `cutout` (`island`, `notch`, `punch`, `home-button`, `none`) in `packages/responsive-analyzer`; phones default to `punch`.
+
 ## How the harder cases are handled
 
 - **Pages that scroll inside a container** (app-shell layouts with `overflow: auto` on a panel): the capture follows the largest inner scroller and tells you what was included.
@@ -117,7 +132,7 @@ The e2e scripts look for Chrome, Chromium or Brave (`CHROME_PATH` overrides). Th
 - **Iframes** are not audited (they do appear in screenshots), and **closed** shadow roots cannot be entered. Fixed elements inside shadow roots are not de-duplicated in full-page captures.
 - **Matched rules** in the Inspector still omit cross-origin stylesheets (their text is parsed for breakpoints, tokens and focus rules, but not matched per element); computed styles are always exact.
 - Automated accessibility checks cover only part of WCAG; contrast over images/gradients is reported as "unverifiable", not guessed.
-- The Device Simulator frames the page in an `<iframe>`, so cookies the site marks `SameSite` may not be sent (you can appear logged out), the framed page's own `navigator.userAgent` stays the desktop one (servers see the phone UA), and the pixel ratio shown is nominal. Use the panel's *Test* / *Screenshot* buttons, which emulate the real tab, when you need exact behaviour.
+- The Device Simulator frames the page in an `<iframe>` and draws the hardware around it with CSS (no photographic assets), so frames are faithful in layout and camera style but not pixel-exact copies of each model, so cookies the site marks `SameSite` may not be sent (you can appear logged out), the framed page's own `navigator.userAgent` stays the desktop one (servers see the phone UA), and the pixel ratio shown is nominal. Use the panel's *Test* / *Screenshot* buttons, which emulate the real tab, when you need exact behaviour.
 - Device emulation uses the DevTools protocol, so Chrome shows its "debugging" bar while it's on, and it can't attach if another extension already holds the tab's debugger. Emulated viewports larger than the real screen render correctly, but screenshots of 5120 px-wide pages are large files.
 - Chrome allows ~2 `captureVisibleTab` calls per second, so very tall pages take a few seconds.
 - Not yet implemented from the PRD's later phases: DevTools panel integration, CSS/JS coverage, screenshot annotation, shareable reports, and the optional AI layer.

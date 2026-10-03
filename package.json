@@ -1,6 +1,6 @@
 {
   "name": "frontend-quality-toolkit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Chrome MV3 side-panel toolkit: inspect, measure, audit, fix, verify and capture.",
   "type": "module",
@@ -14,6 +14,8 @@
     "test": "vitest run",
     "e2e": "npm run build && node tests/e2e/run.mjs",
     "e2e:prod": "npm run build && node tests/e2e/prod.mjs",
+    "validate": "npm run build && node tests/e2e/validate.mjs",
+    "validate:live": "npm run build && node tests/e2e/validate.mjs --live",
     "icons": "node scripts/make-icons.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
