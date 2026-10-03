@@ -1,0 +1,7 @@
+# Every change needs a review from the owner.
+*                         @Karan071
+
+# Permissions and privacy-sensitive files get explicit review.
+/extension/manifest.json  @Karan071
+/PRIVACY.md               @Karan071
+/.github/                 @Karan071
