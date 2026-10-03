@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fixture — deliberately broken page</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --brand: #3b5bdb; --space: 16px; }
+  body { margin: 0; font: 16px/1.5 system-ui, sans-serif; background: #fff; color: #222; }
+  #hdr { position: fixed; top: 0; left: 0; right: 0; height: 56px; background: #ff00ff; z-index: 10; }
+  #ftr { position: fixed; bottom: 0; left: 0; right: 0; height: 48px; background: #00ffff; z-index: 10; }
+  nav.sticky { position: sticky; top: 56px; background: #eeeeee; height: 40px; z-index: 5; }
+  main { padding: 56px 0 48px; }
+  .block { height: 600px; display: flex; align-items: center; justify-content: center; font: 700 40px system-ui; color: #fff; }
+  .faint { color: #aaaaaa; padding: 16px; }
+  .wide { width: 900px; height: 40px; background: #dddddd; }
+  .card { width: 300px; height: 200px; background: #223366; color: #fff; margin: 20px 16px; padding: 12px; box-sizing: border-box; }
+  form { padding: 16px; }
+</style>
+</head>
+<body>
+<div id="hdr"></div>
+<nav class="sticky"><a href="#a">One</a> <a href="#b">Two</a> <a href="#">Click here</a></nav>
+<main>
+  <h1>Fixture</h1>
+  <h4>Skipped heading level</h4>
+  <p class="faint">This text has poor contrast against the white background.</p>
+  <img src="/big.png" width="300" style="display:block;margin:16px">
+  <div class="card" id="card">Card</div>
+  <form>
+    <input type="text" placeholder="Email">
+    <button type="button"><svg width="10" height="10"></svg></button>
+  </form>
+  <div class="wide"></div>
+  <div class="block" id="b1" style="background:#e03131">1</div>
+  <div class="block" id="b2" style="background:#2f9e44">2</div>
+  <div class="block" id="b3" style="background:#1971c2">3</div>
+  <div class="block" id="b4" style="background:#f08c00">4</div>
+  <div class="block" id="b5" style="background:#6741d9">5</div>
+</main>
+<div id="ftr"></div>
+</body>
+</html>
