@@ -17,7 +17,7 @@ pnpm test
 pnpm build
 ```
 
-These are the same four checks CI runs (`.github/workflows/ci.yml`). Run `pnpm e2e` too when you change the side panel, simulator or service worker.
+These are the checks CI runs (`.github/workflows/ci.yml`). Run `pnpm e2e` too when you change the side panel, simulator or service worker.
 
 ## Code rules
 
@@ -29,9 +29,9 @@ These are the same four checks CI runs (`.github/workflows/ci.yml`). Run `pnpm e
 
 ## Commits
 
-- Imperative subject line, 72 characters or fewer, with a body that explains *why* when it is not obvious.
+- Imperative subject line, 72 characters or fewer, with a body that explains _why_ when it is not obvious.
 - Do not commit `dist/`, local screenshots, or secrets.
 
 ## Releases
 
-Bump the version in the root `package.json`, `extension/manifest.json` and every `packages/*/package.json` together, update the lockfile, and add an entry to `CHANGELOG.md`.
+Follow [the software management and release policy](docs/SOFTWARE_MANAGEMENT.md). Keep the root package, extension manifest and every workspace package on the same version. Add a changelog entry and a release note under `docs/releases/`, update the README's latest-release link, and verify whether the lockfile needs changes.
