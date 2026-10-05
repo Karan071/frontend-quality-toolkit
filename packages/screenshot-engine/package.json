@@ -1,9 +1,13 @@
 {
   "name": "@ftk/screenshot-engine",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "private": true,
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
-  "exports": {".": "./src/index.ts", "./collect": "./src/collect.ts", "./engine": "./src/engine.ts"}
+  "exports": {
+    ".": "./src/index.ts",
+    "./collect": "./src/collect.ts",
+    "./engine": "./src/engine.ts"
+  }
 }
