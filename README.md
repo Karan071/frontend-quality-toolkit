@@ -68,6 +68,8 @@ site-assets.zip
 
 Names are sanitised and de-duplicated, missing extensions are restored from the response's content type, and inline SVG / data-URI images are exported as real files. Downloads run in your browser (no cookies are sent, so login-protected files are reported in `_failed.txt`), a few at a time, with progress and **Cancel**.
 
+Downloads are streamed and capped at **50 MB per file** and **500 MB per ZIP**, counting decoded bytes. Only public `http(s)` addresses are fetched: files on `localhost`, LAN or intranet hosts are skipped (and reported) unless the inspected page is itself local, and so is a public URL that redirects into the local network. File names are re-checked when the ZIP is built (Windows device names such as `CON`, trailing dots and runnable extensions like `.exe` or `.sh` are neutralised), and the page URLs in `assets.json` have their query string and fragment removed.
+
 ## How full-page screenshots work
 
 The page is scrolled and captured tile by tile, then stitched on a canvas. To avoid the classic duplicated-header problem: `position: sticky` elements are put back in normal flow, and `position: fixed` elements are shown only in the first tile (top-anchored) or last tile (bottom-anchored). Lazy content is loaded by a pre-scroll pass, scrollbars are hidden during capture, and everything is restored afterwards. Output is capped at the browser's canvas limit (16 384 px per side) and the panel tells you when it had to scale down.
@@ -77,13 +79,13 @@ The page is scrolled and captured tile by tile, then stitched on a canvas. To av
 ```
 extension/
   manifest.json
-  service-worker.ts      emulation (CDP), size probing, screenshot orchestration
+  service-worker.ts      emulation (CDP), size probing, screenshot orchestration; accepts messages from extension pages only
   content/               page-side: inspector, overlay (shadow DOM), temp fixes, collectors, vitals
   sidepanel/             React UI (shadcn-style tokens, Inter + Geist)
   simulator/             full-window device simulator; DeviceFrame.tsx draws the per-device hardware
-  shared/                typed messages, IndexedDB store, audit pipeline
+  shared/                typed messages, IndexedDB store, audit pipeline, capped streaming fetch (fetch.ts)
 packages/                one workspace package per concern
-  audit-core  dom-analyzer  css-analyzer  layout-analyzer  responsive-analyzer
+  audit-core (incl. url-safety)  dom-analyzer  css-analyzer  layout-analyzer  responsive-analyzer
   performance-analyzer  image-analyzer  bundle-analyzer  accessibility-analyzer
   color-analyzer  typography-analyzer  ux-analyzer  screenshot-engine  recommendation-engine
   asset-extractor   (asset discovery, naming, ZIP builder)
@@ -102,6 +104,8 @@ pnpm test          # unit tests
 pnpm typecheck
 pnpm e2e           # builds, then drives the extension in a real browser against fixture pages (shadow DOM, cross-origin CSS, inner scroller, 20 000 px page, Apple/49″/TV emulation, asset extraction with real ZIP verification, responsive UI)
 pnpm e2e:prod      # same workflow against live production sites (needs network)
+pnpm validate      # data-validity audit: ground-truth fixtures, independent re-measurement and impossible-value checks
+pnpm validate:live # same, plus real websites (needs network)
 ```
 
 The e2e scripts look for Chrome, Chromium or Brave (`CHROME_PATH` overrides). They pass `--disable-features=DisableLoadExtensionCommandLineSwitch`, which Chrome 137+ needs to honour `--load-extension`.
@@ -125,18 +129,30 @@ Rotating a phone or tablet moves the camera cutout to the side and the buttons t
 - **Pages that scroll inside a container** (app-shell layouts with `overflow: auto` on a panel): the capture follows the largest inner scroller and tells you what was included.
 - **Very tall pages**: browsers cap a canvas at 16 384 px per side. Instead of shrinking the image, the capture is saved as several full-resolution parts (`…-part1of2.png`); only a page too _wide_ for one canvas is scaled.
 - **Shadow DOM**: open shadow roots are audited, and elements inside them get `host >>> inner` selectors that the highlighter, inspector and element screenshots all understand.
-- **Cross-origin stylesheets**: pages cannot read these through the CSSOM, so the service worker fetches their text and the toolkit parses breakpoints, design tokens and focus-outline removals from it.
+- **Cross-origin stylesheets**: pages cannot read these through the CSSOM, so the service worker fetches their text (public hosts only, capped at 800 KB each) and the toolkit parses breakpoints, design tokens and focus-outline removals from it. The parser is a linear scan, so a crafted stylesheet cannot freeze the panel.
 - **Stalls**: every page and browser call has a timeout, so a busy or navigating page produces an error message rather than a frozen panel.
+
+## Security hardening
+
+The extension has broad host access, and the pages it inspects are untrusted, so it treats everything a page supplies as hostile:
+
+- **No requests into your network on a page's behalf.** Size probes, stylesheet fetches, asset downloads and thumbnails only go to public `http(s)` hosts. Loopback, private, link-local, carrier-grade NAT and intranet-style names (`.local`, `.internal`, single-label hosts), IPv4-mapped IPv6, `file:` and `ftp:` targets are skipped, and redirects are re-checked. The exception is a page that is itself local (a dev server), where local targets are expected. The rules live in `packages/audit-core/src/url-safety.ts`.
+- **Page-supplied values are validated before use.** Design-token colours must be plain colour values before they become inline styles, so a stylesheet cannot make the panel request an arbitrary URL. Page-derived text is escaped in Markdown exports.
+- **Bounded work.** Downloads and stylesheet reads are streamed with size caps, CSS parsing is linear-time, and full-page capture is capped at 40 000 px tall and 20 000 px wide.
+- **Locked-down messaging.** The service worker and content script only act on messages from the extension's own pages, tab ids and emulation sizes are validated, and broadcasts cannot name another tab.
+- **Less data kept.** Stored screenshot metadata and exported audit / `assets.json` page URLs drop the query string, fragment and credentials, which often carry tokens. The simulator frame does not delegate clipboard access to the previewed site.
+
+See [CHANGELOG.md](CHANGELOG.md) for the full list and [PRIVACY.md](PRIVACY.md) for the network behaviour.
 
 ## Known limits
 
-- **Assets**: files used only inside iframes, `::before/::after` background images that never loaded, and CSS referenced from other CSS (`@import`) are not discovered; blob: URLs cannot be downloaded. Please only download assets you have the right to use.
+- **Assets**: files on local-network addresses are not fetched from a public page (see Security hardening); files over 50 MB are reported as failed; files used only inside iframes, `::before/::after` background images that never loaded, and CSS referenced from other CSS (`@import`) are not discovered; blob: URLs cannot be downloaded. Please only download assets you have the right to use.
 - **Iframes** are not audited (they do appear in screenshots), and **closed** shadow roots cannot be entered. Fixed elements inside shadow roots are not de-duplicated in full-page captures.
 - **Matched rules** in the Inspector still omit cross-origin stylesheets (their text is parsed for breakpoints, tokens and focus rules, but not matched per element); computed styles are always exact.
 - Automated accessibility checks cover only part of WCAG; contrast over images/gradients is reported as "unverifiable", not guessed.
 - The Device Simulator frames the page in an `<iframe>` and draws the hardware around it with CSS (no photographic assets), so frames are faithful in layout and camera style but not pixel-exact copies of each model, so cookies the site marks `SameSite` may not be sent (you can appear logged out), the framed page's own `navigator.userAgent` stays the desktop one (servers see the phone UA), and the pixel ratio shown is nominal. Use the panel's _Test_ / _Screenshot_ buttons, which emulate the real tab, when you need exact behaviour.
 - Device emulation uses the DevTools protocol, so Chrome shows its "debugging" bar while it's on, and it can't attach if another extension already holds the tab's debugger. Emulated viewports larger than the real screen render correctly, but screenshots of 5120 px-wide pages are large files.
-- Chrome allows ~2 `captureVisibleTab` calls per second, so very tall pages take a few seconds.
+- Chrome allows ~2 `captureVisibleTab` calls per second, so very tall pages take a few seconds. Pages wider than 20 000 px are captured only up to that width, with a warning.
 - Not yet implemented from the PRD's later phases: DevTools panel integration, CSS/JS coverage, screenshot annotation, shareable reports, and the optional AI layer.
 
 ## Privacy & permissions
