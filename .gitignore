@@ -3,3 +3,14 @@ dist
 .DS_Store
 *.log
 tests/e2e/out
+
+# Secrets and signing material
+.env
+.env.*
+*.pem
+*.key
+*.crx
+
+# Local tooling and reports
+.trunk/
+coverage

@@ -1,4 +1,4 @@
-import { CATEGORY_LABEL, SEVERITY_ORDER, formatMs } from '@ftk/audit-core';
+import { CATEGORY_LABEL, SEVERITY_ORDER, formatMs, redactUrl } from '@ftk/audit-core';
 import type { Category, EnrichedFinding, Finding, Severity, VitalsSnapshot } from '@ftk/audit-core';
 import { RULES } from './rules';
 
@@ -97,10 +97,19 @@ export interface AuditReport {
   findings: EnrichedFinding[];
 }
 
+/**
+ * Page-derived text ends up in a report people paste into trackers and chats. Keep it on one line,
+ * neutralise HTML and cap its length so a hostile title cannot add headings, links or instructions.
+ */
+function plain(text: string | undefined, max = 300): string {
+  const flat = (text ?? '').replace(/\s+/g, ' ').trim();
+  return (flat.length > max ? `${flat.slice(0, max)}…` : flat).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 export function toMarkdown(report: AuditReport): string {
   const lines: string[] = [];
-  lines.push(`# Frontend audit — ${report.title || report.url}`, '');
-  lines.push(`- **URL:** ${report.url}`);
+  lines.push(`# Frontend audit — ${plain(report.title) || plain(redactUrl(report.url))}`, '');
+  lines.push(`- **URL:** ${plain(redactUrl(report.url))}`);
   lines.push(`- **When:** ${new Date(report.takenAt).toISOString()}`);
   lines.push(`- **Viewport:** ${report.viewport.width} × ${report.viewport.height}`);
   lines.push(`- **Findings:** ${report.findings.length}`, '');
@@ -121,12 +130,12 @@ export function toMarkdown(report: AuditReport): string {
     if (!list.length) continue;
     lines.push(`## ${CATEGORY_LABEL[category]} (${list.length})`, '');
     for (const f of list) {
-      lines.push(`### [${f.severity.toUpperCase()}] ${f.title}`, '', f.message, '');
-      if (f.selectors?.length) lines.push(`Elements: ${f.selectors.slice(0, 5).map((s) => `\`${s}\``).join(', ')}${f.count && f.count > 5 ? ` (+${f.count - 5} more)` : ''}`, '');
-      if (f.url) lines.push(`Resource: ${f.url}`, '');
+      lines.push(`### [${f.severity.toUpperCase()}] ${plain(f.title)}`, '', plain(f.message, 1000), '');
+      if (f.selectors?.length) lines.push(`Elements: ${f.selectors.slice(0, 5).map((s) => `\`${plain(s, 200).replace(/`/g, '')}\``).join(', ')}${f.count && f.count > 5 ? ` (+${f.count - 5} more)` : ''}`, '');
+      if (f.url) lines.push(`Resource: ${plain(f.url, 500)}`, '');
       lines.push(`**Why it matters:** ${f.recommendation.why}`, '', '**How to fix:**');
       f.recommendation.how.forEach((h) => lines.push(`- ${h}`));
-      if (f.fix) lines.push('', '```css', f.fix.css, '```');
+      if (f.fix) lines.push('', '```css', f.fix.css.replace(/```/g, '` ` `'), '```');
       lines.push('');
     }
   }

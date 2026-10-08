@@ -112,9 +112,9 @@ function main() {
     },
   };
 
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const type = message?.type as PageType | undefined;
-    if (!type || !(type in handlers)) return false;
+    if (!type || !Object.hasOwn(handlers, type) || sender.id !== chrome.runtime.id) return false;
     panelSeen = true;
     const run = async (): Promise<Result<unknown>> => {
       try {

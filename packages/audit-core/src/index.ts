@@ -1,5 +1,6 @@
 export * from './types';
 export * from './color';
+export * from './url-safety';
 
 import type { Category, EvidenceValue, Finding, Severity, TempFix } from './types';
 

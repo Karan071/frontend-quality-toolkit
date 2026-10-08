@@ -108,6 +108,23 @@ export function extFromMime(mime: string | undefined): string | null {
 
 const DEFAULT_EXT: Record<AssetType, string> = { image: 'png', svg: 'svg', icon: 'ico', font: 'woff2', css: 'css', js: 'js', media: 'mp4', document: 'bin', other: 'bin' };
 
+const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i;
+const RUNNABLE_EXT = /\.(exe|bat|cmd|com|scr|msi|msix|pif|hta|cpl|lnk|vbs|vbe|wsf|ps1|jar|app|dmg|pkg|sh|apk)$/i;
+
+/**
+ * Makes any string safe to use as one file name inside a ZIP or a download: no path separators,
+ * control or reserved characters, no leading dots or trailing dots/spaces, no Windows device
+ * names (CON, NUL…), and nothing that would run when double-clicked.
+ */
+export function safeFileName(name: string): string {
+  // eslint-disable-next-line no-control-regex
+  let n = name.replace(/[\u0000-\u001f\u007f]+/g, '').replace(/[^\w.@()\- ]+/g, '_').replace(/^\.+/, '').replace(/[. ]+$/, '').slice(0, 100);
+  if (!n) n = 'asset';
+  if (WINDOWS_RESERVED.test(n.split('.')[0])) n = `_${n}`;
+  if (RUNNABLE_EXT.test(n)) n += '.txt';
+  return n;
+}
+
 /** Safe file name for a URL: decoded last path segment, sanitized, with an extension guaranteed. */
 export function assetFileName(url: string, type: AssetType, contentType?: string, index = 1): string {
   if (url.startsWith('data:')) {
@@ -116,7 +133,7 @@ export function assetFileName(url: string, type: AssetType, contentType?: string
   }
   if (url.startsWith('inline-svg:')) return `inline-svg-${index}.svg`;
   const segment = pathOf(url).split('/').filter(Boolean).pop() ?? '';
-  let base = segment.replace(/[^\w.@()\- ]+/g, '_').replace(/^\.+/, '').slice(0, 100);
+  let base = segment.replace(/[^\w.@()\- ]+/g, '_').replace(/^\.+/, '').replace(/[. ]+$/, '').slice(0, 100);
   let fromHost = false;
   if (!base) {
     fromHost = true;
@@ -128,7 +145,7 @@ export function assetFileName(url: string, type: AssetType, contentType?: string
   }
   // A host name like "x.com" only looks like it has an extension.
   if (fromHost || !/\.[A-Za-z0-9]{1,6}$/.test(base)) base += `.${extFromMime(contentType) ?? DEFAULT_EXT[type]}`;
-  return base;
+  return safeFileName(base);
 }
 
 // ───────────────────────────── parsing ─────────────────────────────
@@ -203,10 +220,12 @@ export function planZipPaths(assets: Pick<AssetSample, 'id' | 'type' | 'name'>[]
   const out = new Map<string, string>();
   for (const a of assets) {
     const folder = ASSET_FOLDER[a.type];
-    const dot = a.name.lastIndexOf('.');
-    const stem = dot > 0 ? a.name.slice(0, dot) : a.name;
-    const ext = dot > 0 ? a.name.slice(dot) : '';
-    let path = `${folder}/${a.name}`;
+    // Names normally arrive sanitized from the collector; re-check at the archive boundary.
+    const name = safeFileName(a.name);
+    const dot = name.lastIndexOf('.');
+    const stem = dot > 0 ? name.slice(0, dot) : name;
+    const ext = dot > 0 ? name.slice(dot) : '';
+    let path = `${folder}/${name}`;
     for (let n = 2; used.has(path.toLowerCase()); n++) path = `${folder}/${stem}-${n}${ext}`;
     used.add(path.toLowerCase());
     out.set(a.id, path);

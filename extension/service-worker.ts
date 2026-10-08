@@ -1,8 +1,10 @@
+import { isSafeFetchUrl, redactUrl } from '@ftk/audit-core';
 import type { ProbeInfo } from '@ftk/audit-core';
 import { capture } from '@ftk/screenshot-engine/engine';
 import type { PageDriver } from '@ftk/screenshot-engine/engine';
 import type { BackgroundRequests, BackgroundType, BroadcastEvents, EmulationState, PageRequests, PageType, Result } from './shared/messages';
 import { PANEL_PORT, errorMessage } from './shared/messages';
+import { MAX_CSS_BYTES, readTextCapped } from './shared/fetch';
 import { saveScreenshot } from './shared/store';
 
 // ───────────────────────────── side panel ─────────────────────────────
@@ -153,8 +155,8 @@ async function probeOne(url: string): Promise<ProbeInfo> {
   return {};
 }
 
-async function probe(urls: string[]): Promise<Record<string, ProbeInfo>> {
-  const unique = [...new Set(urls.filter((u) => /^https?:/.test(u)))].slice(0, 150);
+async function probe(urls: string[], pageUrl?: string): Promise<Record<string, ProbeInfo>> {
+  const unique = [...new Set(urls.filter((u) => isSafeFetchUrl(u, pageUrl)))].slice(0, 150);
   const out: Record<string, ProbeInfo> = {};
   let i = 0;
   await Promise.all(
@@ -169,15 +171,16 @@ async function probe(urls: string[]): Promise<Record<string, ProbeInfo>> {
 }
 
 /** Fetches stylesheet text the page itself cannot read (cross-origin, no CORS). Capped and credential-free. */
-async function fetchCss(urls: string[]): Promise<Record<string, string>> {
+async function fetchCss(urls: string[], pageUrl?: string): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
-  const list = [...new Set(urls.filter((u) => /^https?:/.test(u)))].slice(0, 15);
+  const list = [...new Set(urls.filter((u) => isSafeFetchUrl(u, pageUrl)))].slice(0, 15);
   await Promise.all(
     list.map(async (url) => {
       try {
         const res = await fetch(url, { credentials: 'omit', signal: AbortSignal.timeout(8000) });
-        if (!res.ok) return;
-        out[url] = (await res.text()).slice(0, 800_000);
+        // A public URL may redirect into the local network; drop the body in that case.
+        if (!res.ok || !isSafeFetchUrl(res.url || url, pageUrl)) return;
+        out[url] = await readTextCapped(res, MAX_CSS_BYTES);
       } catch {
         /* unreachable or timed out: the sheet simply stays unreadable */
       }
@@ -240,7 +243,8 @@ async function captureShot(req: BackgroundRequests['bg:capture']['req']): Promis
       const id = crypto.randomUUID();
       ids.push(id);
       // Parts of one capture stay together and keep their order (newest-first listing).
-      await saveScreenshot({ ...out, id, createdAt: now + (outputs.length - i) });
+      // Query strings and fragments often carry tokens; the stored copy keeps only the address.
+      await saveScreenshot({ ...out, meta: { ...out.meta, url: redactUrl(out.meta.url) }, id, createdAt: now + (outputs.length - i) });
     }
     return { id: ids[0], ids };
   } finally {
@@ -256,30 +260,40 @@ async function captureShot(req: BackgroundRequests['bg:capture']['req']): Promis
 type BgHandlers = { [K in BackgroundType]: (req: BackgroundRequests[K]['req']) => Promise<BackgroundRequests[K]['res']> };
 
 const handlers: BgHandlers = {
-  'bg:probe': ({ urls }) => probe(urls),
-  'bg:fetch-css': ({ urls }) => fetchCss(urls),
+  'bg:probe': ({ urls, pageUrl }) => probe(urls, pageUrl),
+  'bg:fetch-css': ({ urls, pageUrl }) => fetchCss(urls, pageUrl),
   'bg:emulate': async ({ tabId, width, height, mobile, dpr }) => {
+    requireTabId(tabId);
+    if (![width, height].every((n) => Number.isInteger(n) && n >= 50 && n <= 10_000)) throw new Error('Invalid viewport size.');
+    if (dpr != null && !(dpr >= 0 && dpr <= 8)) throw new Error('Invalid device pixel ratio.');
     await ready;
     const state = await setEmulation(tabId, width, height, mobile, dpr);
     broadcast('evt:emulation', { tabId, state });
     return state;
   },
   'bg:emulate-clear': async ({ tabId }) => {
+    requireTabId(tabId);
     await ready;
     const state = await clearEmulation(tabId);
     broadcast('evt:emulation', { tabId, state });
     return state;
   },
   'bg:emulation-state': async ({ tabId }) => {
+    requireTabId(tabId);
     await ready;
     return emulation.get(tabId) ?? { active: false };
   },
-  'bg:capture': (req) => captureShot(req),
+  'bg:capture': async (req) => {
+    requireTabId(req.tabId);
+    return captureShot(req);
+  },
   'bg:reload': async ({ tabId, bypassCache }) => {
+    requireTabId(tabId);
     await chrome.tabs.reload(tabId, { bypassCache });
     return {};
   },
   'bg:cleanup': async ({ tabId }) => {
+    requireTabId(tabId);
     await clearEmulation(tabId);
     await callPage(tabId, 'fix:clear').catch(() => undefined);
     await callPage(tabId, 'highlight:clear').catch(() => undefined);
@@ -289,9 +303,22 @@ const handlers: BgHandlers = {
   },
 };
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+/**
+ * Only the extension's own pages (side panel, simulator, viewer) may drive the worker. Content
+ * scripts also reach this listener but run next to untrusted page code, so their messages are
+ * ignored: `bg:*` can fetch arbitrary URLs, attach the debugger and capture any tab.
+ */
+function isExtensionPage(sender: chrome.runtime.MessageSender | chrome.runtime.Port['sender']): boolean {
+  return sender?.id === chrome.runtime.id && !!sender.url && sender.url.startsWith(chrome.runtime.getURL(''));
+}
+
+function requireTabId(tabId: unknown): asserts tabId is number {
+  if (!Number.isInteger(tabId) || (tabId as number) < 0) throw new Error('Invalid tab.');
+}
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const type = message?.type as BackgroundType | undefined;
-  if (!type || !(type in handlers)) return false;
+  if (!type || !Object.hasOwn(handlers, type) || !isExtensionPage(sender)) return false;
   (async (): Promise<Result<unknown>> => {
     try {
       const handler = handlers[type] as (req: unknown) => Promise<unknown>;
@@ -311,10 +338,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
  * page: emulation, temporary CSS and overlays.
  */
 chrome.runtime.onConnect.addListener((port) => {
-  if (port.name !== PANEL_PORT) return;
+  if (port.name !== PANEL_PORT || !isExtensionPage(port.sender)) return;
   const touched = new Set<number>();
   port.onMessage.addListener((msg: { type: string; tabId?: number }) => {
-    if (msg.type === 'touch' && msg.tabId != null) touched.add(msg.tabId);
+    if (msg.type === 'touch' && Number.isInteger(msg.tabId)) touched.add(msg.tabId as number);
   });
   port.onDisconnect.addListener(() => {
     touched.forEach((tabId) => handlers['bg:cleanup']({ tabId }).catch(() => undefined));

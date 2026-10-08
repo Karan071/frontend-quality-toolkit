@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { isPlainColorValue } from '@ftk/audit-core';
 import { analyzePalette } from '@ftk/color-analyzer';
 import { summarizeTypography } from '@ftk/typography-analyzer';
 import { buttonVariants, summarizeSpacing } from '@ftk/ux-analyzer';
@@ -162,7 +163,7 @@ function Tokens() {
               <div key={t.name} style={{ display: 'contents' }}>
                 <dt>{t.name}</dt>
                 <dd>
-                  {g.kind === 'color' && <span className="swatch" style={{ background: t.value, marginRight: 5, verticalAlign: 'middle' }} />}
+                  {g.kind === 'color' && isPlainColorValue(t.value) && <span className="swatch" style={{ background: t.value, marginRight: 5, verticalAlign: 'middle' }} />}
                   {t.value}
                 </dd>
               </div>

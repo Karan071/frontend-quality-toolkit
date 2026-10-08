@@ -3,6 +3,10 @@
 //   node scripts/build.mjs --watch   rebuild on change
 import { build, context } from 'esbuild';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+// Every path below is relative to the repo root, whatever directory the script is run from.
+process.chdir(fileURLToPath(new URL('..', import.meta.url)));
 
 const watch = process.argv.includes('--watch');
 const out = 'dist';

@@ -3,7 +3,7 @@
 
 /** Lucide-style stroke icons (24×24 grid). Markup is static and trusted. */
 const CIRCLE = '<circle cx="12" cy="12" r="10"/>';
-const ICONS: Record<string, string> = {
+const ICONS = {
   error: `${CIRCLE}<path d="m15 9-6 6M9 9l6 6"/>`,
   warning: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/>',
   info: `${CIRCLE}<path d="M12 16v-4M12 8h.01"/>`,
@@ -42,7 +42,7 @@ const ICONS: Record<string, string> = {
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
   home: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>',
   lock: '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
-};
+} as const satisfies Record<string, string>;
 
 export type IconName = keyof typeof ICONS;
 

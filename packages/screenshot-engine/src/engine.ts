@@ -1,4 +1,4 @@
-import { MAX_CAPTURE_HEIGHT, buildMeta, planParts, planTiles, screenshotName } from './index';
+import { MAX_CAPTURE_HEIGHT, MAX_CAPTURE_WIDTH, buildMeta, planParts, planTiles, screenshotName } from './index';
 import type {
   CaptureRequest,
   ElementTarget,
@@ -105,6 +105,12 @@ export async function capture(req: CaptureRequest, { driver, grab, progress }: E
       region = { ...region, height: MAX_CAPTURE_HEIGHT };
       truncated = true;
       warnings.push(`Page is very tall; capture stopped at ${MAX_CAPTURE_HEIGHT.toLocaleString()} px.`);
+    }
+
+    if (region.width > MAX_CAPTURE_WIDTH) {
+      region = { ...region, width: MAX_CAPTURE_WIDTH };
+      truncated = true;
+      warnings.push(`Page is very wide; capture stopped at ${MAX_CAPTURE_WIDTH.toLocaleString()} px.`);
     }
 
     const requestedScale = info.viewport.dpr || 1;

@@ -90,6 +90,8 @@ export const MAX_CANVAS_SIDE = 16384;
 export const MAX_CANVAS_AREA = 16384 * 16384;
 /** Hard cap on captured document height (CSS px). */
 export const MAX_CAPTURE_HEIGHT = 40000;
+/** Hard cap on captured document width (CSS px). A hostile page can claim a scroll width in the millions. */
+export const MAX_CAPTURE_WIDTH = 20000;
 
 export interface PartPlan {
   /** Output scale (device pixels per CSS px). Only reduced when the page is too *wide* for one canvas. */

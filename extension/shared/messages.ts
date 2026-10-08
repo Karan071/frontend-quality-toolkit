@@ -40,8 +40,8 @@ export interface EmulationState {
 
 /** Panel → service worker. Sent with chrome.runtime.sendMessage. */
 export interface BackgroundRequests {
-  'bg:probe': { req: { urls: string[] }; res: Record<string, ProbeInfo> };
-  'bg:fetch-css': { req: { urls: string[] }; res: Record<string, string> };
+  'bg:probe': { req: { urls: string[]; pageUrl?: string }; res: Record<string, ProbeInfo> };
+  'bg:fetch-css': { req: { urls: string[]; pageUrl?: string }; res: Record<string, string> };
   'bg:emulate': { req: { tabId: number; width: number; height: number; mobile: boolean; dpr?: number }; res: EmulationState };
   'bg:emulate-clear': { req: { tabId: number }; res: EmulationState };
   'bg:emulation-state': { req: { tabId: number }; res: EmulationState };

@@ -24,9 +24,9 @@ Every finding has the **evidence**, **why it matters**, **how to fix it**, an el
 ## Install (from source)
 
 ```bash
-npm install
-npm run build          # outputs dist/
-npm run icons          # (optional) re-render the PNG icons from extension/icons/*.svg
+pnpm install
+pnpm build             # outputs dist/
+pnpm icons             # (optional) re-render the PNG icons from extension/icons/*.svg
 ```
 
 Then open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked** and select the `dist/` folder. Click the toolbar icon to open the side panel.
@@ -97,11 +97,11 @@ Collectors run in the page and return plain JSON; **analyzers are pure functions
 ## Development
 
 ```bash
-npm run dev        # rebuild on change (reload the extension in chrome://extensions)
-npm test           # unit tests
-npm run typecheck
-npm run e2e        # builds, then drives the extension in a real browser against fixture pages (shadow DOM, cross-origin CSS, inner scroller, 20 000 px page, Apple/49″/TV emulation, asset extraction with real ZIP verification, responsive UI)
-npm run e2e:prod   # same workflow against live production sites (needs network)
+pnpm dev           # rebuild on change (reload the extension in chrome://extensions)
+pnpm test          # unit tests
+pnpm typecheck
+pnpm e2e           # builds, then drives the extension in a real browser against fixture pages (shadow DOM, cross-origin CSS, inner scroller, 20 000 px page, Apple/49″/TV emulation, asset extraction with real ZIP verification, responsive UI)
+pnpm e2e:prod      # same workflow against live production sites (needs network)
 ```
 
 The e2e scripts look for Chrome, Chromium or Brave (`CHROME_PATH` overrides). They pass `--disable-features=DisableLoadExtensionCommandLineSwitch`, which Chrome 137+ needs to honour `--load-extension`.
