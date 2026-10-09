@@ -17,7 +17,7 @@ pnpm test
 pnpm build
 ```
 
-These are the checks CI runs (`.github/workflows/ci.yml`). Run `pnpm e2e` too when you change the side panel, simulator or service worker.
+These are the checks CI runs (`.github/workflows/ci.yml`). Run `pnpm e2e` too when you change the side panel, simulator or service worker, and `pnpm validate` when you change a collector, analyzer or the audit pipeline (it compares reported numbers with ground truth). Test code that calls `bg:probe` or `bg:fetch-css` must pass `pageUrl`, as the panel does.
 
 ## Code rules
 

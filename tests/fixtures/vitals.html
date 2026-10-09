@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Vitals fixture</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body{margin:0;font:16px sans-serif}
+  #a{height:200px;background:#4a90d9;color:#fff}
+  #lcp{display:block;width:400px;height:250px}
+  #btn{display:block;width:200px;height:60px;margin:20px}
+</style></head>
+<body>
+<h1 id="h">Vitals</h1>
+<div id="slot"></div>
+<div id="a">content that gets pushed down</div>
+<img id="lcp" src="/lcpimg.png" alt="lcp">
+<button id="btn" type="button">Slow click</button>
+<script>
+  // After load: insert 100px banner above #a (known layout shift), then burn 220ms (known long task).
+  addEventListener('load', () => setTimeout(() => {
+    const b = document.createElement('div'); b.id = 'banner'; b.style.cssText = 'height:100px;background:#e8590c'; b.textContent = 'late banner';
+    document.getElementById('slot').appendChild(b);
+    setTimeout(() => { const t = performance.now(); while (performance.now() - t < 220); }, 700);
+  }, 400));
+  document.getElementById('btn').addEventListener('click', () => { const t = performance.now(); while (performance.now() - t < 320); });
+</script>
+</body></html>

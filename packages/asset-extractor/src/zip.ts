@@ -24,6 +24,9 @@ export interface ZipResult {
   cancelled: boolean;
 }
 
+/** Default ceiling for everything held in memory while the archive is built. */
+export const DEFAULT_MAX_ZIP_BYTES = 500 * 1024 * 1024;
+
 const TEXT_TYPES = new Set(['css', 'js', 'svg', 'document', 'other']);
 const ENC = new TextEncoder();
 
@@ -35,7 +38,7 @@ const ENC = new TextEncoder();
 export async function buildZip(
   assets: AssetSample[],
   fetchBytes: (a: AssetSample) => Promise<FetchedAsset>,
-  opts: { onProgress?: (p: ZipProgress) => void; concurrency?: number; signal?: { cancelled: boolean }; source?: { url: string; title: string } } = {},
+  opts: { onProgress?: (p: ZipProgress) => void; concurrency?: number; signal?: { cancelled: boolean }; source?: { url: string; title: string }; maxBytes?: number } = {},
 ): Promise<ZipResult> {
   const paths = planZipPaths(assets);
   const chunks: Uint8Array[] = [];
@@ -72,6 +75,7 @@ export async function buildZip(
       report(a.name);
       try {
         const got = await fetchBytes(a);
+        if (bytes + got.bytes.byteLength > (opts.maxBytes ?? DEFAULT_MAX_ZIP_BYTES)) throw new Error('Skipped: archive size limit reached');
         // A path with no usable extension (server sent a generic name) can be improved from the MIME type.
         let finalPath = path;
         const ext = extFromMime(got.contentType);

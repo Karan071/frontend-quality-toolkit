@@ -143,6 +143,7 @@ try {
   await shot('04-uiux');
   await findingsOf('Images');
   await shot('05-images');
+  await findingsOf('Performance');
   await shot('06-performance');
   check('performance tab renders vitals', (await panel.$$('.metric')).length >= 6);
 
@@ -399,8 +400,9 @@ try {
   await sleep(150);
   const searched = await panel.$$eval('.list .list-item strong', (els) => els.map((e) => e.textContent));
   check('search narrows across categories', searched.length >= 2 && searched.every((n) => /ipad pro/i.test(n)), searched.join(' | '));
-  await panel.click('.search', { clickCount: 3 });
-  await panel.keyboard.press('Backspace');
+  // Select-all by triple-click is not reliable across puppeteer versions; erase what was typed instead.
+  await panel.focus('.search');
+  for (let i = 0; i < 'ipad pro'.length; i++) await panel.keyboard.press('Backspace');
   await sleep(150);
   await clickText('.chip-btn', 'Apple');
   const shootRow = async (label) => {

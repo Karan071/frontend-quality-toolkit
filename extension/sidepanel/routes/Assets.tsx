@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { formatBytes } from '@ftk/audit-core';
+import { formatBytes, isSafeFetchUrl } from '@ftk/audit-core';
 import { ASSET_LABEL, ASSET_TYPES, countByType, totalBytes } from '@ftk/asset-extractor';
 import type { AssetSample, AssetType } from '@ftk/asset-extractor';
 import { cancelAssetDownload, downloadAsset, downloadAssetsZip, highlightSelectors, scanAssets, toast } from '../actions';
@@ -15,11 +15,14 @@ const TYPE_ICON: Record<AssetType, IconName> = {
 const PAGE_SIZE = 150;
 
 function Thumb({ a }: { a: AssetSample }) {
-  const visual = a.type === 'image' || a.type === 'icon' || a.type === 'svg';
-  const src = a.svg ? svgDataUrl(a.svg) : a.url;
+  const { tab } = useApp();
+  // Thumbnails load from this extension's origin, so URLs the page points at the user's local
+  // network (127.0.0.1, 192.168.x.x…) are not requested.
+  const src = a.svg ? svgDataUrl(a.svg) : a.url.startsWith('data:') || isSafeFetchUrl(a.url, tab.url) ? a.url : null;
+  const visual = (a.type === 'image' || a.type === 'icon' || a.type === 'svg') && src;
   return (
     <span className="asset-thumb" aria-hidden="true">
-      {visual ? <img src={src} alt="" loading="lazy" decoding="async" /> : <Icon name={TYPE_ICON[a.type]} />}
+      {visual ? <img src={src} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" /> : <Icon name={TYPE_ICON[a.type]} />}
     </span>
   );
 }

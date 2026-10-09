@@ -70,7 +70,11 @@ export async function ensureContent(tabId: number): Promise<void> {
 
 export function onBroadcast<K extends EventType>(type: K, fn: (payload: BroadcastEvents[K], sender: chrome.runtime.MessageSender) => void): () => void {
   const listener = (message: { type?: string }, sender: chrome.runtime.MessageSender) => {
-    if (message?.type === type) fn({ ...(message as object), tabId: (message as { tabId?: number }).tabId ?? sender.tab?.id } as BroadcastEvents[K], sender);
+    // Only our own contexts may broadcast. Events from a content script are attributed to the tab
+    // that sent them; a message-supplied tabId is trusted only from the service worker.
+    if (sender.id !== chrome.runtime.id || message?.type !== type) return;
+    const claimed = (message as { tabId?: number }).tabId;
+    fn({ ...(message as object), tabId: sender.tab && !sender.url?.startsWith(chrome.runtime.getURL('')) ? sender.tab.id : claimed } as BroadcastEvents[K], sender);
   };
   chrome.runtime.onMessage.addListener(listener);
   return () => chrome.runtime.onMessage.removeListener(listener);

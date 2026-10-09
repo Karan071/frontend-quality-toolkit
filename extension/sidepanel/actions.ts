@@ -1,4 +1,4 @@
-import { ALL_KINDS } from '@ftk/audit-core';
+import { ALL_KINDS, isSafeFetchUrl, redactUrl } from '@ftk/audit-core';
 import type { PageSnapshot, ProbeInfo, Severity } from '@ftk/audit-core';
 import { toMarkdown } from '@ftk/recommendation-engine';
 import { CORE_PRESET_IDS, DEVICE_PRESETS, summarizeViewportTest } from '@ftk/responsive-analyzer';
@@ -214,14 +214,14 @@ export async function runAudit(opts: { quiet?: boolean } = {}) {
 
     const wanted = urlsToProbe(snapshot).filter((u) => !probeCache.has(u));
     if (wanted.length) {
-      const probes = await callBg('bg:probe', { urls: wanted }).catch(() => ({}));
+      const probes = await callBg('bg:probe', { urls: wanted, pageUrl: getState().tab.url }).catch(() => ({}));
       Object.entries(probes).forEach(([u, p]) => probeCache.set(u, p));
     }
     snapshot = applyProbes(snapshot, Object.fromEntries(probeCache));
 
     const sheets = externalSheetUrls(snapshot).filter((u) => !cssCache.has(u));
     if (sheets.length) {
-      const fetched = await callBg('bg:fetch-css', { urls: sheets }).catch(() => ({}) as Record<string, string>);
+      const fetched = await callBg('bg:fetch-css', { urls: sheets, pageUrl: getState().tab.url }).catch(() => ({}) as Record<string, string>);
       Object.entries(fetched).forEach(([u, t]) => cssCache.set(u, t));
     }
     snapshot = applyExternalCss(snapshot, Object.fromEntries(cssCache));
@@ -549,7 +549,7 @@ export function downloadAudit(kind: 'md' | 'json') {
     downloadBlob(new Blob([exportMarkdown() ?? ''], { type: 'text/markdown' }), `${host}-audit.md`);
   } else {
     const { snapshot: _snapshot, ...rest } = audit;
-    downloadBlob(new Blob([JSON.stringify({ ...rest, viewport: audit.snapshot.viewport, vitals: audit.snapshot.vitals }, null, 2)], { type: 'application/json' }), `${host}-audit.json`);
+    downloadBlob(new Blob([JSON.stringify({ ...rest, url: redactUrl(rest.url), viewport: audit.snapshot.viewport, vitals: audit.snapshot.vitals }, null, 2)], { type: 'application/json' }), `${host}-audit.json`);
   }
 }
 
@@ -578,9 +578,9 @@ async function probeAssetSizes(tabId: number) {
   for (let round = 0; round < 4; round++) {
     const scan = getState().assets;
     if (!scan || scan.tabId !== tabId) return;
-    const todo = scan.items.filter((a) => a.bytes == null && /^https?:/.test(a.url)).slice(0, 150);
+    const todo = scan.items.filter((a) => a.bytes == null && isSafeFetchUrl(a.url, getState().tab.url)).slice(0, 150);
     if (!todo.length) return;
-    const probes = await callBg('bg:probe', { urls: todo.map((a) => a.url) }).catch(() => ({}) as Record<string, { size?: number; contentType?: string }>);
+    const probes = await callBg('bg:probe', { urls: todo.map((a) => a.url), pageUrl: getState().tab.url }).catch(() => ({}) as Record<string, { size?: number; contentType?: string }>);
     setState((s) => {
       if (!s.assets || s.assets.tabId !== tabId) return {};
       const items = s.assets.items.map((a) => {
@@ -595,7 +595,7 @@ async function probeAssetSizes(tabId: number) {
 }
 
 export async function downloadAsset(a: AssetSample) {
-  const got = await fetchAssetBytes(a);
+  const got = await fetchAssetBytes(a, getState().tab.url);
   downloadBlob(new Blob([got.bytes as BlobPart], { type: got.contentType ?? 'application/octet-stream' }), downloadName(a, got.contentType));
 }
 
@@ -610,9 +610,9 @@ export async function downloadAssetsZip(list: AssetSample[], label: string) {
   const tab = getState().tab;
   setState({ assetProgress: { done: 0, total: list.length, failed: 0, bytes: 0, label } });
   try {
-    const result = await buildZip(list, fetchAssetBytes, {
+    const result = await buildZip(list, (a) => fetchAssetBytes(a, tab.url), {
       signal: assetCancel,
-      source: { url: tab.url, title: tab.title },
+      source: { url: redactUrl(tab.url), title: tab.title },
       onProgress: (p) => setState({ assetProgress: { ...p, label } }),
     });
     let host = 'page';

@@ -16,6 +16,11 @@ export default tseslint.config(
       'react-hooks/exhaustive-deps': 'warn',
       'no-console': ['warn', { allow: ['warn', 'error'] }],
       'no-useless-assignment': 'off',
+      // The extension never needs dynamic code; MV3 forbids it, and it is the usual XSS escalation.
+      'no-eval': 'error',
+      'no-implied-eval': 'error',
+      'no-new-func': 'error',
+      'no-script-url': 'error',
       eqeqeq: ['error', 'always', { null: 'ignore' }],
       'prefer-const': 'error',
       '@typescript-eslint/consistent-type-imports': ['error', { fixStyle: 'inline-type-imports' }],

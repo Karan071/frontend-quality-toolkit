@@ -342,7 +342,7 @@ export function Simulator() {
                     height={device.height}
                     // No allow-top-navigation: framed pages cannot navigate this simulator away.
                     sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads allow-pointer-lock"
-                    allow="fullscreen; clipboard-read; clipboard-write"
+                    allow="fullscreen"
                     onLoad={() => setLoading(false)}
                   />
                 )}
