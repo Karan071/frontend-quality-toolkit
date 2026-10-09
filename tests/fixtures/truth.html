@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Truth fixture</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/truth.css">
+<link rel="stylesheet" href="__XO__/xo.css">
+<script src="/truth.js" defer></script>
+<script src="__XO__/xo.js" defer></script>
+<script>/* é€ inline: 2 non-ASCII chars -> 3+2 bytes each in UTF-8 */ var a = 1;</script>
+</head>
+<body>
+<h1>Heading one</h1>
+<h2>Heading two</h2>
+<h3 style="display:none">Hidden three</h3>
+<h4>Heading four (skips 3)</h4>
+
+<!-- Contrast samples: each has an exactly known fg/bg -->
+<div class="c" id="t1"  style="color:#000000;background:#ffffff">black on white</div>
+<div class="c" id="t2"  style="color:#767676;background:#ffffff">767676 on white</div>
+<div class="c" id="t3"  style="color:#777777;background:#ffffff">777777 on white</div>
+<div class="c" id="t4"  style="color:#ffffff;background:#223366">white on navy</div>
+<div class="c" id="t5"  style="color:rgba(0,0,0,.5);background:#ffffff">half black text</div>
+<div style="opacity:.5;background:#ffffff"><div class="c" id="t6" style="color:#000000;font-size:17px">opacity parent</div></div>
+<div class="c" id="t7"  style="color:hsl(0 100% 40%);background:#ffffff">hsl red</div>
+<div class="c" id="t8"  style="color:oklch(0.5 0.2 30);background:#ffffff">oklch</div>
+<div class="c" id="t9"  style="color:color-mix(in srgb, red 50%, blue);background:#ffffff">color-mix</div>
+<div style="background:#ffffff"><div class="c" id="t10" style="color:#ffffff;background:rgba(0,0,0,.5)">translucent bg over white</div></div>
+<div class="c" id="t11" style="color:#ffffff;background:linear-gradient(90deg,#ffffff,#000000)">gradient</div>
+<div class="c" id="t12" style="color:lab(40 60 40);background:lch(90 5 90)">lab on lch</div>
+<div class="c" id="t13" style="color:#fff;background:#0b6">tiny3 on green</div>
+
+<img id="big" src="/big.png" alt="big" width="300" style="display:block">
+<img id="small" src="/small.png" alt="small" width="20" height="20">
+<img id="gone" src="/missing.png" alt="gone" width="40" height="40">
+<img id="xo" src="__XO__/xo.png" alt="cross origin" width="100" height="100">
+<img id="nodim" src="/small.png" alt="no dimensions">
+<img id="dec" src="/small.png" alt="" width="20" height="20">
+<div id="bgimg" style="width:120px;height:60px;background:url(/small.png)"></div>
+
+<button id="tap30" type="button" style="width:30px;height:30px;padding:0">x</button>
+<button id="tap48" type="button" style="width:48px;height:48px;padding:0">y</button>
+<a href="#">hash link</a> <a href="/x">real link</a> <a href="javascript:void(0)">js link</a>
+<form id="f"><input id="email" type="text" placeholder="Email"><input id="named" type="text" aria-label="Named"></form>
+
+<p id="para" style="width:300px;font:14px/1.5 Arial, sans-serif;margin:0;padding:0">The quick brown fox jumps over the lazy dog and keeps running through the long green meadow until sunset.</p>
+<span id="small11" style="font-size:11px">eleven px text</span>
+
+<div id="wide" style="width:900px;height:20px;background:#ddd"></div>
+<div id="sp" style="padding:8px 16px;margin-top:24px;border-radius:6px;background:#eee">spacing</div>
+<div id="dup">a</div><div id="dup">b</div>
+<div id="lbl" aria-labelledby="nope">broken ref</div>
+<div id="pos" tabindex="3">positive tabindex</div>
+<div role="bogusrole" id="role">bad role</div>
+
+<x-w id="host"></x-w>
+<script>
+  customElements.define('x-w', class extends HTMLElement {
+    connectedCallback() { this.attachShadow({mode:'open'}).innerHTML = '<p class="in" style="color:#777777;margin:0;font-size:15px">shadow text</p>'; }
+  });
+</script>
+</body>
+</html>

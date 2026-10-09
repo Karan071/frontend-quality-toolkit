@@ -182,7 +182,7 @@ for (const url of SITES) {
   } catch (e) {
     ok('site run completed', false, String(e.message).slice(0, 200));
     // Diagnose what is stuck, with short timeouts so diagnosis itself cannot hang.
-    const within = (p, ms = 4000) => Promise.race([p, sleep(ms).then(() => 'TIMEOUT')]);
+    const within = (p, ms = 4000) => Promise.race([Promise.resolve(p).catch((err) => `ERROR: ${String(err.message).slice(0, 100)}`), sleep(ms).then(() => 'TIMEOUT')]);
     console.log('  diag panel :', await within(panel?.evaluate(() => ({ busy: !!document.querySelector('.footer .progress'), footer: document.querySelector('.footer')?.textContent?.slice(0, 120), toasts: [...document.querySelectorAll('.toast')].map((t) => t.textContent) })) ?? 'no panel'));
     console.log('  diag page  :', await within(page?.evaluate(() => ({ scrollY, hide: document.documentElement.getAttribute('data-ftk-hide'), marked: document.querySelectorAll('[data-ftk-pos],[data-ftk-sticky]').length, style: !!document.getElementById('__ftk-shot-style') })) ?? 'no page'));
     console.log('  diag sw    :', await within(sw.evaluate(async () => ({ tabs: (await chrome.tabs.query({})).map((t) => `${t.id}:${t.active ? 'A' : '-'}:${(t.url || '').slice(0, 40)}`), dbg: (await chrome.debugger.getTargets()).filter((t) => t.attached).map((t) => `${t.tabId}:${t.type}`) }))));

@@ -108,7 +108,7 @@ pnpm validate      # data-validity audit: ground-truth fixtures, independent re-
 pnpm validate:live # same, plus real websites (needs network)
 ```
 
-The e2e scripts look for Chrome, Chromium or Brave (`CHROME_PATH` overrides). They pass `--disable-features=DisableLoadExtensionCommandLineSwitch`, which Chrome 137+ needs to honour `--load-extension`.
+The e2e scripts look for Chrome, Chromium or Brave (`CHROME_PATH` overrides). Live-site runs (`e2e:prod`, `validate:live`) depend on the network and on a long-lived browser session, so a failure on one site can be a timeout or a browser crash; re-run that site alone (`node tests/e2e/prod.mjs <url>`) before treating it as a regression. They pass `--disable-features=DisableLoadExtensionCommandLineSwitch`, which Chrome 137+ needs to honour `--load-extension`.
 
 ### Device simulator and frames
 

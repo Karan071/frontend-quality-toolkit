@@ -14,8 +14,16 @@
 - Query strings and fragments are removed from saved screenshot metadata and from exported audit and `assets.json` page URLs. Markdown exports escape page-derived text.
 - The simulator frame no longer delegates clipboard access to the previewed site.
 
+### Added
+
+- `pnpm validate` / `pnpm validate:live`: a data-validity suite (`tests/e2e/validate.mjs`) that checks reported numbers against ground truth in a real browser. Fixtures `tests/fixtures/truth.html` and `vitals.html` have known contrast ratios, image and script byte sizes, breakpoints, a hand-derived CLS and a server TTFB delay; results are compared with independent `PerformanceObserver` measurements and pixel samples. It also checks that every reported selector resolves to one element.
+- The main e2e run now opens the Performance tab's findings before its screenshot.
+
 ### Changed
 
+- The e2e scripts call the size probe and cross-origin CSS fetch with `pageUrl`, as the panel does. Without it the new local-network guard (correctly) refuses a `localhost` fixture.
+- The live-site runner's failure diagnostics no longer throw when the page or browser has already gone away, so the real error is reported.
+- Known limits found by the validation suite and not changed: inline script size counts UTF-16 characters rather than bytes, `elementCount` excludes shadow-DOM elements, and first/third-party detection treats hosts under multi-part suffixes (`co.id`, `github.io`) as the same site.
 - Dev tooling: `vitest` 5 and `puppeteer-core` 25 (clears the open `pnpm audit` advisories), `@types/node` added explicitly. The stale `package-lock.json` is removed; the project uses pnpm. CI actions are pinned to commit SHAs and Dependabot is enabled. ESLint now forbids `eval`-style APIs.
 
 ## 0.1.3

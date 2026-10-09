@@ -143,6 +143,7 @@ try {
   await shot('04-uiux');
   await findingsOf('Images');
   await shot('05-images');
+  await findingsOf('Performance');
   await shot('06-performance');
   check('performance tab renders vitals', (await panel.$$('.metric')).length >= 6);
 
